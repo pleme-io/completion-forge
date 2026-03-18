@@ -1,6 +1,7 @@
 // OpenAPI spec → completion IR conversion.
 
 use std::collections::BTreeMap;
+use std::fmt;
 
 use anyhow::Result;
 use heck::ToKebabCase;
@@ -33,6 +34,17 @@ impl GroupingStrategy {
             "path" | "paths" | "by-path" => Self::ByPath,
             "operation" | "operation-id" | "by-operation-id" => Self::ByOperationId,
             _ => Self::Auto,
+        }
+    }
+}
+
+impl fmt::Display for GroupingStrategy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Auto => write!(f, "auto"),
+            Self::ByTag => write!(f, "by-tag"),
+            Self::ByPath => write!(f, "by-path"),
+            Self::ByOperationId => write!(f, "by-operation-id"),
         }
     }
 }
@@ -489,5 +501,147 @@ paths: {}
             GroupingStrategy::from_str_loose("anything"),
             GroupingStrategy::Auto
         ));
+    }
+
+    #[test]
+    fn grouping_strategy_display() {
+        assert_eq!(GroupingStrategy::Auto.to_string(), "auto");
+        assert_eq!(GroupingStrategy::ByTag.to_string(), "by-tag");
+        assert_eq!(GroupingStrategy::ByPath.to_string(), "by-path");
+        assert_eq!(GroupingStrategy::ByOperationId.to_string(), "by-operation-id");
+    }
+
+    #[test]
+    fn test_collect_params_merges_path_and_op() {
+        use crate::spec::Parameter;
+
+        let path_params = vec![Parameter {
+            name: "petId".into(),
+            location: "path".into(),
+            required: true,
+            description: Some("Pet identifier".into()),
+            schema: None,
+        }];
+        let op_params = vec![Parameter {
+            name: "limit".into(),
+            location: "query".into(),
+            required: false,
+            description: Some("Max results".into()),
+            schema: None,
+        }];
+
+        let result = collect_params(&path_params, &op_params);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].name, "petId");
+        assert!(result[0].required);
+        assert_eq!(result[1].name, "limit");
+        assert!(!result[1].required);
+    }
+
+    #[test]
+    fn test_collect_body_fields_from_json() {
+        use crate::spec::{MediaType, Operation, RequestBody, Schema};
+        use std::collections::BTreeMap;
+
+        let mut properties = BTreeMap::new();
+        properties.insert(
+            "name".to_owned(),
+            Schema {
+                schema_type: Some("string".into()),
+                properties: BTreeMap::new(),
+                description: Some("Pet name".into()),
+            },
+        );
+        properties.insert(
+            "age".to_owned(),
+            Schema {
+                schema_type: Some("integer".into()),
+                properties: BTreeMap::new(),
+                description: None,
+            },
+        );
+
+        let mut content = BTreeMap::new();
+        content.insert(
+            "application/json".to_owned(),
+            MediaType {
+                schema: Some(Schema {
+                    schema_type: Some("object".into()),
+                    properties,
+                    description: None,
+                }),
+            },
+        );
+
+        let op = Operation {
+            operation_id: None,
+            summary: None,
+            description: None,
+            parameters: vec![],
+            request_body: Some(RequestBody { content }),
+            tags: vec![],
+        };
+
+        let fields = collect_body_fields(&op);
+        assert_eq!(fields.len(), 2);
+        let names: Vec<&str> = fields.iter().map(|f| f.name.as_str()).collect();
+        assert!(names.contains(&"name"));
+        assert!(names.contains(&"age"));
+    }
+
+    #[test]
+    fn test_collect_body_fields_no_body() {
+        use crate::spec::Operation;
+
+        let op = Operation {
+            operation_id: None,
+            summary: None,
+            description: None,
+            parameters: vec![],
+            request_body: None,
+            tags: vec![],
+        };
+
+        let fields = collect_body_fields(&op);
+        assert!(fields.is_empty());
+    }
+
+    #[test]
+    fn test_format_group_description() {
+        assert_eq!(format_group_description("pets"), "Pets operations");
+        assert_eq!(
+            format_group_description("user-accounts"),
+            "User accounts operations"
+        );
+    }
+
+    #[test]
+    fn test_group_key_by_tag() {
+        let op = RawOp {
+            method: "GET".into(),
+            path: "/pets".into(),
+            operation_id: "listPets".into(),
+            summary: "List pets".into(),
+            tags: vec!["Animals".into(), "Other".into()],
+            params: vec![],
+            body_fields: vec![],
+        };
+        let key = group_key(&op, GroupingStrategy::ByTag);
+        assert_eq!(key, "animals");
+    }
+
+    #[test]
+    fn test_group_key_by_path() {
+        let op = RawOp {
+            method: "GET".into(),
+            path: "/pets/{petId}".into(),
+            operation_id: "getPet".into(),
+            summary: "Get pet".into(),
+            tags: vec!["Animals".into()],
+            params: vec![],
+            body_fields: vec![],
+        };
+        let key = group_key(&op, GroupingStrategy::ByPath);
+        assert_eq!(key, "pets");
     }
 }

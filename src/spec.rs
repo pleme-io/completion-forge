@@ -102,6 +102,7 @@ pub struct Schema {
 
 impl PathItem {
     /// Iterate over all (method_name, operation) pairs in this path.
+    #[must_use]
     pub fn operations(&self) -> Vec<(&str, &Operation)> {
         let mut ops = Vec::new();
         if let Some(ref op) = self.get {

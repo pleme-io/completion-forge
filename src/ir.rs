@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 // ── Top-level IR ───────────────────────────────────────────────────────────
 
 /// A complete completion spec for a single CLI tool.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CompletionSpec {
     /// CLI command name (e.g., "petstore").
     pub name: String,
@@ -22,7 +22,7 @@ pub struct CompletionSpec {
 }
 
 /// A group of related operations, mapped to a CLI subcommand.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CommandGroup {
     /// Subcommand name (kebab-case).
     pub name: String,
@@ -37,7 +37,7 @@ pub struct CommandGroup {
 }
 
 /// A single completable operation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CompletionOp {
     /// Operation name (e.g., "list-pets").
     pub name: String,
@@ -48,7 +48,7 @@ pub struct CompletionOp {
 }
 
 /// A completable flag/option.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CompletionFlag {
     /// Flag name without dashes (e.g., "limit").
     pub name: String,
@@ -61,7 +61,7 @@ pub struct CompletionFlag {
 // ── Glyph ─────────────────────────────────────────────────────────────────
 
 /// Category glyph, auto-assigned based on HTTP method mix.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Glyph {
     /// Read/inspect operations (all GET).
     View,
