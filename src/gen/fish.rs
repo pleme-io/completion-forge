@@ -178,4 +178,86 @@ mod tests {
         // Should not have any complete commands
         assert!(!content.contains("complete -c"));
     }
+
+    #[test]
+    fn test_generate_required_flag_has_r() {
+        let dir = tempfile::tempdir().unwrap();
+        let spec = CompletionSpec {
+            name: "reqtest".into(),
+            icon: String::new(),
+            aliases: vec![],
+            description: "Required flag test".into(),
+            groups: vec![CommandGroup {
+                name: "items".into(),
+                description: "Item operations".into(),
+                glyph: Glyph::View,
+                operations: vec![],
+                flags: vec![
+                    CompletionFlag {
+                        name: "id".into(),
+                        description: "Item ID".into(),
+                        required: true,
+                    },
+                    CompletionFlag {
+                        name: "verbose".into(),
+                        description: "Verbose output".into(),
+                        required: false,
+                    },
+                ],
+            }],
+        };
+
+        let path = generate(&spec, dir.path()).unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
+
+        // Required flag "id" must have -r
+        let id_line = content.lines().find(|l| l.contains("-l 'id'")).unwrap();
+        assert!(
+            id_line.contains(" -r "),
+            "required flag 'id' should have -r: {id_line}"
+        );
+
+        // Optional flag "verbose" must NOT have -r
+        let verbose_line = content
+            .lines()
+            .find(|l| l.contains("-l 'verbose'"))
+            .unwrap();
+        assert!(
+            !verbose_line.contains("-r"),
+            "optional flag 'verbose' should not have -r: {verbose_line}"
+        );
+    }
+
+    #[test]
+    fn test_generate_no_aliases_no_extra_blank_lines() {
+        let dir = tempfile::tempdir().unwrap();
+        let spec = CompletionSpec {
+            name: "noalias".into(),
+            icon: String::new(),
+            aliases: vec![],
+            description: "No aliases".into(),
+            groups: vec![CommandGroup {
+                name: "things".into(),
+                description: "Thing operations".into(),
+                glyph: Glyph::View,
+                operations: vec![CompletionOp {
+                    name: "list".into(),
+                    description: "List things".into(),
+                    method: "GET".into(),
+                }],
+                flags: vec![],
+            }],
+        };
+
+        let path = generate(&spec, dir.path()).unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
+
+        // With no aliases, there's only one command block — no extra blank line
+        // separators between alias blocks should appear. Check that there are
+        // no consecutive blank lines.
+        assert!(
+            !content.contains("\n\n\n"),
+            "should not have triple newlines (extra blank lines): {content:?}"
+        );
+    }
 }

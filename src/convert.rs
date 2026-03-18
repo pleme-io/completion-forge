@@ -51,6 +51,35 @@ impl fmt::Display for GroupingStrategy {
 
 // ── Conversion ────────────────────────────────────────────────────────────
 
+// ── Converter trait ───────────────────────────────────────────────────
+
+/// Trait for converting an OpenAPI spec into a `CompletionSpec`.
+pub trait Converter: Send + Sync {
+    /// Perform the conversion.
+    ///
+    /// # Errors
+    /// Returns an error if the spec cannot be converted.
+    fn convert(&self, spec: &OpenApiSpec) -> Result<CompletionSpec>;
+}
+
+/// Default converter that delegates to the free `convert()` function.
+pub struct DefaultConverter {
+    /// CLI command name.
+    pub name: String,
+    /// Prompt icon (Unicode glyph).
+    pub icon: String,
+    /// Command aliases.
+    pub aliases: Vec<String>,
+    /// Grouping strategy.
+    pub strategy: GroupingStrategy,
+}
+
+impl Converter for DefaultConverter {
+    fn convert(&self, spec: &OpenApiSpec) -> Result<CompletionSpec> {
+        convert(spec, &self.name, &self.icon, &self.aliases, self.strategy)
+    }
+}
+
 /// Convert an OpenAPI spec into a `CompletionSpec`.
 ///
 /// # Errors
@@ -67,15 +96,16 @@ pub fn convert(
     for (path, item) in &spec.paths {
         let path_params = &item.parameters;
         for (method, op) in item.operations() {
+            let summary = first_non_empty(&[
+                op.summary.as_deref(),
+                op.description.as_deref(),
+            ])
+            .to_owned();
             raw_ops.push(RawOp {
                 method: method.to_owned(),
                 path: path.clone(),
                 operation_id: op.operation_id.clone().unwrap_or_default(),
-                summary: op
-                    .summary
-                    .clone()
-                    .or_else(|| op.description.clone())
-                    .unwrap_or_default(),
+                summary,
                 tags: op.tags.clone(),
                 params: collect_params(path_params, &op.parameters),
                 body_fields: collect_body_fields(op),
@@ -197,6 +227,15 @@ struct RawParam {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
+
+/// Return the first non-empty `&str` from a slice of options, or `""`.
+fn first_non_empty<'a>(values: &[Option<&'a str>]) -> &'a str {
+    values
+        .iter()
+        .copied()
+        .find_map(|v| v.filter(|s| !s.is_empty()))
+        .unwrap_or_default()
+}
 
 fn collect_params(
     path_params: &[crate::spec::Parameter],
@@ -643,5 +682,92 @@ paths: {}
         };
         let key = group_key(&op, GroupingStrategy::ByPath);
         assert_eq!(key, "pets");
+    }
+
+    #[test]
+    fn test_first_non_empty() {
+        assert_eq!(first_non_empty(&[Some("hello"), Some("world")]), "hello");
+        assert_eq!(first_non_empty(&[None, Some("world")]), "world");
+        assert_eq!(first_non_empty(&[Some(""), Some("world")]), "world");
+        assert_eq!(first_non_empty(&[None, None]), "");
+        assert_eq!(first_non_empty(&[]), "");
+    }
+
+    #[test]
+    fn test_default_converter() {
+        let spec = petstore_spec();
+        let converter = DefaultConverter {
+            name: "petstore".into(),
+            icon: "\u{2601}".into(),
+            aliases: vec!["ps".into()],
+            strategy: GroupingStrategy::Auto,
+        };
+        let result = converter.convert(&spec).unwrap();
+        assert_eq!(result.name, "petstore");
+        assert_eq!(result.aliases, vec!["ps"]);
+        assert_eq!(result.groups.len(), 2);
+    }
+
+    #[test]
+    fn test_convert_operation_without_tags_falls_to_path() {
+        // Spec with operations that have no tags — Auto should fall to ByPath
+        // (or ByOperationId if operation IDs exist).
+        let spec: OpenApiSpec = serde_yaml_ng::from_str(
+            r#"
+info:
+  title: No Tags API
+  version: "1.0.0"
+paths:
+  /users:
+    get:
+      summary: List users
+    post:
+      summary: Create user
+  /orders:
+    get:
+      summary: List orders
+"#,
+        )
+        .unwrap();
+
+        let result = convert(&spec, "notags", "", &[], GroupingStrategy::Auto).unwrap();
+        // No tags, no operation IDs → Auto falls through to ByPath.
+        // /users → "users", /orders → "orders"
+        assert_eq!(result.groups.len(), 2);
+        let group_names: Vec<&str> = result.groups.iter().map(|g| g.name.as_str()).collect();
+        assert!(group_names.contains(&"users"));
+        assert!(group_names.contains(&"orders"));
+    }
+
+    #[test]
+    fn test_convert_operation_without_id_or_tags_uses_path() {
+        // No operation IDs, no tags — everything must fall back to path-based naming.
+        let spec: OpenApiSpec = serde_yaml_ng::from_str(
+            r#"
+info:
+  title: Bare API
+  version: "1.0.0"
+paths:
+  /items/{itemId}:
+    get:
+      summary: Get item
+    delete:
+      summary: Delete item
+"#,
+        )
+        .unwrap();
+
+        let result = convert(&spec, "bare", "", &[], GroupingStrategy::Auto).unwrap();
+        assert_eq!(result.groups.len(), 1);
+        assert_eq!(result.groups[0].name, "items");
+        // Operations should be named from method + path since no operation ID.
+        assert_eq!(result.groups[0].operations.len(), 2);
+        let op_names: Vec<&str> = result.groups[0]
+            .operations
+            .iter()
+            .map(|o| o.name.as_str())
+            .collect();
+        assert!(op_names.contains(&"get-items"));
+        assert!(op_names.contains(&"delete-items"));
     }
 }
