@@ -4,7 +4,7 @@
 
 ```bash
 cargo build
-cargo test           # 38 tests
+cargo test           # 58 tests
 cargo run -- generate --spec api.yaml --output ./completions --format all
 cargo run -- inspect --spec api.yaml
 ```
@@ -33,10 +33,10 @@ convert.rs (GroupingStrategy → CommandGroup[] with glyph auto-assignment)
 
 | Module | Purpose |
 |--------|---------|
-| `src/spec.rs` | Minimal OpenAPI 3.0 serde types (paths, operations, parameters, tags) |
-| `src/ir.rs` | `CompletionSpec`, `CommandGroup`, `CompletionOp`, `CompletionFlag`, `Glyph` enum |
-| `src/convert.rs` | OpenAPI → IR conversion with `GroupingStrategy` (Auto/ByTag/ByPath/ByOperationId) |
-| `src/gen/mod.rs` | Generator dispatcher, `Format` enum (SkimTab/Fish/All) |
+| `src/spec.rs` | Minimal OpenAPI 3.0 serde types, `SpecLoader` trait + `FileSpecLoader` + `StringSpecLoader` (test) |
+| `src/ir.rs` | `CompletionSpec`, `CommandGroup`, `CompletionOp`, `CompletionFlag`, `Glyph` enum (all `PartialEq + Eq`, `Glyph` also `Hash`) |
+| `src/convert.rs` | `Converter` trait + `DefaultConverter`, `GroupingStrategy` (Auto/ByTag/ByPath/ByOperationId) with `Display` |
+| `src/gen/mod.rs` | `OutputGenerator` trait + `SkimTabGenerator` + `FishGenerator`, `Format` enum with `Display` |
 | `src/gen/skim_tab.rs` | Generates skim-tab YAML matching `CompletionSpec` serde format |
 | `src/gen/fish.rs` | Generates fish completion files with subcommand/flag nesting |
 | `src/main.rs` | CLI: generate + inspect subcommands |
@@ -98,6 +98,7 @@ complete -c tool -n "__fish_seen_subcommand_from pets" -l 'limit' -d 'Maximum re
 ## Design Decisions
 
 - **Minimal OpenAPI types** — only what's needed for completions (no schemas, no auth)
+- **Trait-based architecture** — `SpecLoader`, `Converter`, `OutputGenerator` traits for testability and extensibility
 - **Glyph auto-assignment** — matches skim-tab's existing glyph conventions
 - **Flag extraction** — path params → required flags, query params → optional, body fields → optional
 - **Nix build** — substrate `rust-tool-release-flake.nix` pattern
