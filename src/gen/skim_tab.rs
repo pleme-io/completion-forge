@@ -161,4 +161,52 @@ mod tests {
         let content = std::fs::read_to_string(&path).unwrap();
         assert!(!content.contains("icon:"));
     }
+
+    #[test]
+    fn test_generate_with_many_groups() {
+        use crate::ir::CompletionFlag;
+
+        let groups: Vec<CommandGroup> = (0..12)
+            .map(|i| {
+                let glyph = if i % 2 == 0 { Glyph::View } else { Glyph::Create };
+                CommandGroup {
+                    name: format!("group-{i}"),
+                    description: format!("Group {i} operations"),
+                    glyph,
+                    operations: vec![CompletionOp {
+                        name: format!("op-{i}"),
+                        description: format!("Operation {i}"),
+                        method: "GET".into(),
+                    }],
+                    flags: vec![CompletionFlag {
+                        name: format!("flag-{i}"),
+                        description: format!("Flag {i}"),
+                        required: false,
+                    }],
+                }
+            })
+            .collect();
+
+        let spec = CompletionSpec {
+            name: "big-api".into(),
+            icon: "\u{2601}".into(),
+            aliases: vec![],
+            description: "API with many groups".into(),
+            groups,
+        };
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = generate(&spec, dir.path()).unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
+        let parsed: SkimTabSpec = serde_yaml_ng::from_str(&content).unwrap();
+
+        assert_eq!(parsed.subcommands.len(), 12);
+        for i in 0..12 {
+            let key = format!("group-{i}");
+            assert!(
+                parsed.subcommands.contains_key(&key),
+                "missing subcommand: {key}"
+            );
+        }
+    }
 }

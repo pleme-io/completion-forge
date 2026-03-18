@@ -1,8 +1,56 @@
 // Minimal OpenAPI 3.0 serde types — only what completion-forge needs.
 
 use std::collections::BTreeMap;
+use std::path::Path;
 
+use anyhow::{Context, Result};
 use serde::Deserialize;
+
+// ── Spec loading ─────────────────────────────────────────────────────────
+
+/// Trait for loading OpenAPI specs from a source.
+pub trait SpecLoader: Send + Sync {
+    /// Load an OpenAPI spec from the given path.
+    ///
+    /// # Errors
+    /// Returns an error if the file cannot be read or parsed.
+    fn load(&self, path: &Path) -> Result<OpenApiSpec>;
+}
+
+/// Loads specs from the filesystem, detecting JSON vs YAML by extension.
+pub struct FileSpecLoader;
+
+impl SpecLoader for FileSpecLoader {
+    fn load(&self, path: &Path) -> Result<OpenApiSpec> {
+        let content = std::fs::read_to_string(path)
+            .with_context(|| format!("failed to read spec: {}", path.display()))?;
+        if path.extension().is_some_and(|e| e == "json") {
+            Ok(serde_json::from_str(&content)?)
+        } else {
+            Ok(serde_yaml_ng::from_str(&content)?)
+        }
+    }
+}
+
+/// In-memory spec loader for tests.
+#[cfg(test)]
+pub struct StringSpecLoader {
+    /// The raw spec content (YAML or JSON).
+    pub content: String,
+    /// Whether to parse as JSON (true) or YAML (false).
+    pub is_json: bool,
+}
+
+#[cfg(test)]
+impl SpecLoader for StringSpecLoader {
+    fn load(&self, _path: &Path) -> Result<OpenApiSpec> {
+        if self.is_json {
+            Ok(serde_json::from_str(&self.content)?)
+        } else {
+            Ok(serde_yaml_ng::from_str(&self.content)?)
+        }
+    }
+}
 
 // ── Root ───────────────────────────────────────────────────────────────────
 
@@ -240,6 +288,52 @@ paths:
             "paths": {}
         }"#;
         let spec: OpenApiSpec = serde_json::from_str(json).unwrap();
+        assert_eq!(spec.info.title, "JSON API");
+    }
+
+    #[test]
+    fn file_spec_loader_yaml() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.yaml");
+        std::fs::write(&path, MINIMAL_SPEC).unwrap();
+
+        let loader = FileSpecLoader;
+        let spec = loader.load(&path).unwrap();
+        assert_eq!(spec.info.title, "Test API");
+    }
+
+    #[test]
+    fn file_spec_loader_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.json");
+        std::fs::write(
+            &path,
+            r#"{"info":{"title":"JSON API","version":"1.0"},"paths":{}}"#,
+        )
+        .unwrap();
+
+        let loader = FileSpecLoader;
+        let spec = loader.load(&path).unwrap();
+        assert_eq!(spec.info.title, "JSON API");
+    }
+
+    #[test]
+    fn string_spec_loader_yaml() {
+        let loader = StringSpecLoader {
+            content: MINIMAL_SPEC.to_owned(),
+            is_json: false,
+        };
+        let spec = loader.load(Path::new("ignored.yaml")).unwrap();
+        assert_eq!(spec.info.title, "Test API");
+    }
+
+    #[test]
+    fn string_spec_loader_json() {
+        let loader = StringSpecLoader {
+            content: r#"{"info":{"title":"JSON API","version":"1.0"},"paths":{}}"#.to_owned(),
+            is_json: true,
+        };
+        let spec = loader.load(Path::new("ignored.json")).unwrap();
         assert_eq!(spec.info.title, "JSON API");
     }
 }
