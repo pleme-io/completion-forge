@@ -1,157 +1,14 @@
-// Minimal OpenAPI 3.0 serde types — only what completion-forge needs.
+//! OpenAPI 3.0 spec types — delegated to sekkei.
 
-use std::collections::BTreeMap;
-use std::path::Path;
+pub use sekkei::*;
 
-use anyhow::{Context, Result};
-use serde::Deserialize;
-
-// ── Spec loading ─────────────────────────────────────────────────────────
-
-/// Trait for loading OpenAPI specs from a source.
-pub trait SpecLoader: Send + Sync {
-    /// Load an OpenAPI spec from the given path.
-    ///
-    /// # Errors
-    /// Returns an error if the file cannot be read or parsed.
-    fn load(&self, path: &Path) -> Result<OpenApiSpec>;
+// completion-forge-specific extension: iterate operations on a PathItem.
+pub trait PathItemExt {
+    fn operations(&self) -> Vec<(&str, &sekkei::Operation)>;
 }
 
-/// Loads specs from the filesystem, detecting JSON vs YAML by extension.
-pub struct FileSpecLoader;
-
-impl SpecLoader for FileSpecLoader {
-    fn load(&self, path: &Path) -> Result<OpenApiSpec> {
-        let content = std::fs::read_to_string(path)
-            .with_context(|| format!("failed to read spec: {}", path.display()))?;
-        if path.extension().is_some_and(|e| e == "json") {
-            Ok(serde_json::from_str(&content)?)
-        } else {
-            Ok(serde_yaml_ng::from_str(&content)?)
-        }
-    }
-}
-
-/// In-memory spec loader for tests.
-#[cfg(test)]
-pub struct StringSpecLoader {
-    /// The raw spec content (YAML or JSON).
-    pub content: String,
-    /// Whether to parse as JSON (true) or YAML (false).
-    pub is_json: bool,
-}
-
-#[cfg(test)]
-impl SpecLoader for StringSpecLoader {
-    fn load(&self, _path: &Path) -> Result<OpenApiSpec> {
-        if self.is_json {
-            Ok(serde_json::from_str(&self.content)?)
-        } else {
-            Ok(serde_yaml_ng::from_str(&self.content)?)
-        }
-    }
-}
-
-// ── Root ───────────────────────────────────────────────────────────────────
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct OpenApiSpec {
-    pub info: Info,
-    #[serde(default)]
-    pub paths: BTreeMap<String, PathItem>,
-}
-
-// ── Info ───────────────────────────────────────────────────────────────────
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct Info {
-    pub title: String,
-    #[serde(default)]
-    pub description: Option<String>,
-    pub version: String,
-}
-
-// ── Paths & Operations ────────────────────────────────────────────────────
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct PathItem {
-    #[serde(default)]
-    pub get: Option<Operation>,
-    #[serde(default)]
-    pub post: Option<Operation>,
-    #[serde(default)]
-    pub put: Option<Operation>,
-    #[serde(default)]
-    pub delete: Option<Operation>,
-    #[serde(default)]
-    pub patch: Option<Operation>,
-    #[serde(default)]
-    pub parameters: Vec<Parameter>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Operation {
-    #[serde(default)]
-    pub operation_id: Option<String>,
-    #[serde(default)]
-    pub summary: Option<String>,
-    #[serde(default)]
-    pub description: Option<String>,
-    #[serde(default)]
-    pub parameters: Vec<Parameter>,
-    #[serde(default)]
-    pub request_body: Option<RequestBody>,
-    #[serde(default)]
-    pub tags: Vec<String>,
-}
-
-// ── Parameters ─────────────────────────────────────────────────────────────
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct Parameter {
-    pub name: String,
-    #[serde(rename = "in")]
-    pub location: String,
-    #[serde(default)]
-    pub required: bool,
-    #[serde(default)]
-    pub description: Option<String>,
-    #[serde(default)]
-    pub schema: Option<Schema>,
-}
-
-// ── Request Body ───────────────────────────────────────────────────────────
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct RequestBody {
-    #[serde(default)]
-    pub content: BTreeMap<String, MediaType>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct MediaType {
-    #[serde(default)]
-    pub schema: Option<Schema>,
-}
-
-// ── Schema (minimal) ──────────────────────────────────────────────────────
-
-#[derive(Debug, Clone, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct Schema {
-    #[serde(rename = "type", default)]
-    pub schema_type: Option<String>,
-    #[serde(default)]
-    pub properties: BTreeMap<String, Schema>,
-    #[serde(default)]
-    pub description: Option<String>,
-}
-
-impl PathItem {
-    /// Iterate over all (method_name, operation) pairs in this path.
-    #[must_use]
-    pub fn operations(&self) -> Vec<(&str, &Operation)> {
+impl PathItemExt for sekkei::PathItem {
+    fn operations(&self) -> Vec<(&str, &sekkei::Operation)> {
         let mut ops = Vec::new();
         if let Some(ref op) = self.get {
             ops.push(("GET", op));
@@ -319,21 +176,16 @@ paths:
 
     #[test]
     fn string_spec_loader_yaml() {
-        let loader = StringSpecLoader {
-            content: MINIMAL_SPEC.to_owned(),
-            is_json: false,
-        };
-        let spec = loader.load(Path::new("ignored.yaml")).unwrap();
+        let spec: OpenApiSpec = serde_yaml_ng::from_str(MINIMAL_SPEC).unwrap();
         assert_eq!(spec.info.title, "Test API");
     }
 
     #[test]
     fn string_spec_loader_json() {
-        let loader = StringSpecLoader {
-            content: r#"{"info":{"title":"JSON API","version":"1.0"},"paths":{}}"#.to_owned(),
-            is_json: true,
-        };
-        let spec = loader.load(Path::new("ignored.json")).unwrap();
+        let spec: OpenApiSpec = serde_json::from_str(
+            r#"{"info":{"title":"JSON API","version":"1.0"},"paths":{}}"#,
+        )
+        .unwrap();
         assert_eq!(spec.info.title, "JSON API");
     }
 }
