@@ -7,7 +7,7 @@ use anyhow::Result;
 use heck::ToKebabCase;
 
 use crate::ir::{CommandGroup, CompletionFlag, CompletionOp, CompletionSpec, Glyph};
-use crate::spec::OpenApiSpec;
+use crate::spec::{OpenApiSpec, PathItemExt};
 
 // ── Grouping strategy ─────────────────────────────────────────────────────
 
@@ -560,6 +560,7 @@ paths: {}
             required: true,
             description: Some("Pet identifier".into()),
             schema: None,
+            ref_path: None,
         }];
         let op_params = vec![Parameter {
             name: "limit".into(),
@@ -567,6 +568,7 @@ paths: {}
             required: false,
             description: Some("Max results".into()),
             schema: None,
+            ref_path: None,
         }];
 
         let result = collect_params(&path_params, &op_params);
@@ -587,16 +589,15 @@ paths: {}
             "name".to_owned(),
             Schema {
                 schema_type: Some("string".into()),
-                properties: BTreeMap::new(),
                 description: Some("Pet name".into()),
+                ..Schema::default()
             },
         );
         properties.insert(
             "age".to_owned(),
             Schema {
                 schema_type: Some("integer".into()),
-                properties: BTreeMap::new(),
-                description: None,
+                ..Schema::default()
             },
         );
 
@@ -607,7 +608,7 @@ paths: {}
                 schema: Some(Schema {
                     schema_type: Some("object".into()),
                     properties,
-                    description: None,
+                    ..Schema::default()
                 }),
             },
         );
@@ -617,7 +618,14 @@ paths: {}
             summary: None,
             description: None,
             parameters: vec![],
-            request_body: Some(RequestBody { content }),
+            request_body: Some(RequestBody {
+                required: false,
+                content,
+                description: None,
+                ref_path: None,
+            }),
+            responses: BTreeMap::new(),
+            security: vec![],
             tags: vec![],
         };
 
@@ -631,6 +639,7 @@ paths: {}
     #[test]
     fn test_collect_body_fields_no_body() {
         use crate::spec::Operation;
+        use std::collections::BTreeMap;
 
         let op = Operation {
             operation_id: None,
@@ -638,6 +647,8 @@ paths: {}
             description: None,
             parameters: vec![],
             request_body: None,
+            responses: BTreeMap::new(),
+            security: vec![],
             tags: vec![],
         };
 
