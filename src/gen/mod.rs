@@ -7,30 +7,42 @@ pub mod skim_tab;
 
 use std::fmt;
 use std::path::Path;
+use std::str::FromStr;
 
-use anyhow::{Context, Result};
-
+use crate::error::{ForgeError, ForgeResult};
 use crate::ir::CompletionSpec;
 
 /// Output format for generated completions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Format {
     /// Skim-tab YAML format.
     SkimTab,
     /// Fish shell completion format.
     Fish,
     /// Generate all supported formats.
+    #[default]
     All,
 }
 
 impl Format {
-    /// Parse from string (for CLI).
+    /// Parse from string leniently, falling back to [`All`](Self::All) on
+    /// unrecognised input. Prefer [`FromStr`] when you want an error.
     #[must_use]
     pub fn from_str_loose(s: &str) -> Self {
+        s.parse().unwrap_or(Self::All)
+    }
+}
+
+impl FromStr for Format {
+    type Err = crate::error::ParseEnumError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "skim-tab" | "skim_tab" | "skimtab" | "yaml" => Self::SkimTab,
-            "fish" => Self::Fish,
-            _ => Self::All,
+            "skim-tab" | "skim_tab" | "skimtab" | "yaml" => Ok(Self::SkimTab),
+            "fish" => Ok(Self::Fish),
+            "all" => Ok(Self::All),
+            _ => Err(crate::error::ParseEnumError(s.to_owned())),
         }
     }
 }
@@ -52,8 +64,8 @@ pub trait OutputGenerator {
     /// Generate completion files and return the output path.
     ///
     /// # Errors
-    /// Returns an error if file I/O or serialization fails.
-    fn generate(&self, spec: &CompletionSpec, output_dir: &Path) -> Result<String>;
+    /// Returns a [`ForgeError`] if file I/O or serialization fails.
+    fn generate(&self, spec: &CompletionSpec, output_dir: &Path) -> ForgeResult<String>;
 }
 
 /// Generator for skim-tab YAML output.
@@ -64,7 +76,7 @@ impl OutputGenerator for SkimTabGenerator {
         "skim-tab"
     }
 
-    fn generate(&self, spec: &CompletionSpec, output_dir: &Path) -> Result<String> {
+    fn generate(&self, spec: &CompletionSpec, output_dir: &Path) -> ForgeResult<String> {
         skim_tab::generate(spec, output_dir)
     }
 }
@@ -77,7 +89,7 @@ impl OutputGenerator for FishGenerator {
         "fish"
     }
 
-    fn generate(&self, spec: &CompletionSpec, output_dir: &Path) -> Result<String> {
+    fn generate(&self, spec: &CompletionSpec, output_dir: &Path) -> ForgeResult<String> {
         fish::generate(spec, output_dir)
     }
 }
@@ -85,10 +97,14 @@ impl OutputGenerator for FishGenerator {
 /// Generate completion files in the specified format.
 ///
 /// # Errors
-/// Returns an error if file I/O fails.
-pub fn generate(spec: &CompletionSpec, output_dir: &Path, format: Format) -> Result<Vec<String>> {
-    std::fs::create_dir_all(output_dir)
-        .with_context(|| format!("failed to create output directory: {}", output_dir.display()))?;
+/// Returns a [`ForgeError`] if the output directory cannot be created,
+/// or if any format-specific generator fails.
+pub fn generate(
+    spec: &CompletionSpec,
+    output_dir: &Path,
+    format: Format,
+) -> ForgeResult<Vec<String>> {
+    std::fs::create_dir_all(output_dir).map_err(|e| ForgeError::io(output_dir, e))?;
 
     let generators: Vec<&dyn OutputGenerator> = match format {
         Format::SkimTab => vec![&SkimTabGenerator],
@@ -100,9 +116,7 @@ pub fn generate(spec: &CompletionSpec, output_dir: &Path, format: Format) -> Res
     for generator in generators {
         let path = generator
             .generate(spec, output_dir)
-            .with_context(|| {
-                format!("failed to generate {} completions", generator.format_name())
-            })?;
+            .map_err(|e| ForgeError::generate(generator.format_name(), e))?;
         generated.push(path);
     }
 
@@ -134,7 +148,11 @@ mod tests {
         fn format_name(&self) -> &'static str {
             "mock"
         }
-        fn generate(&self, _spec: &CompletionSpec, _output: &Path) -> Result<String> {
+        fn generate(
+            &self,
+            _spec: &CompletionSpec,
+            _output: &Path,
+        ) -> crate::error::ForgeResult<String> {
             Ok("mock.txt".to_owned())
         }
     }
@@ -280,8 +298,15 @@ mod tests {
         fn format_name(&self) -> &'static str {
             "failing"
         }
-        fn generate(&self, _spec: &CompletionSpec, _output: &Path) -> Result<String> {
-            anyhow::bail!("intentional failure")
+        fn generate(
+            &self,
+            _spec: &CompletionSpec,
+            _output: &Path,
+        ) -> crate::error::ForgeResult<String> {
+            Err(crate::error::ForgeError::io(
+                "/fake",
+                std::io::Error::new(std::io::ErrorKind::PermissionDenied, "intentional failure"),
+            ))
         }
     }
 
@@ -294,6 +319,18 @@ mod tests {
         assert!(result.is_err());
         let err_msg = format!("{}", result.unwrap_err());
         assert!(err_msg.contains("intentional failure"));
+    }
+
+    #[test]
+    fn generate_to_readonly_dir_returns_io_error() {
+        let spec = sample_spec();
+        let result = generate(&spec, std::path::Path::new("/proc/nonexistent"), Format::All);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            matches!(err, crate::error::ForgeError::Io { .. }),
+            "expected ForgeError::Io, got: {err:?}"
+        );
     }
 
     #[test]
@@ -322,5 +359,33 @@ mod tests {
         };
         let result = generate(&spec, dir.path(), Format::All).unwrap();
         assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn format_from_str_valid() {
+        assert_eq!("fish".parse::<Format>().unwrap(), Format::Fish);
+        assert_eq!("all".parse::<Format>().unwrap(), Format::All);
+        assert_eq!("skim-tab".parse::<Format>().unwrap(), Format::SkimTab);
+    }
+
+    #[test]
+    fn format_from_str_invalid() {
+        assert!("nope".parse::<Format>().is_err());
+    }
+
+    #[test]
+    fn format_display_from_str_roundtrip() {
+        let variants = [Format::SkimTab, Format::Fish, Format::All];
+        for v in &variants {
+            let s = v.to_string();
+            let parsed: Format =
+                s.parse().unwrap_or_else(|_| panic!("failed to parse Format from: {s}"));
+            assert_eq!(*v, parsed, "round-trip failed for {s}");
+        }
+    }
+
+    #[test]
+    fn format_default_is_all() {
+        assert_eq!(Format::default(), Format::All);
     }
 }
