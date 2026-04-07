@@ -97,8 +97,7 @@ fn main() -> Result<()> {
             let format = r#gen::Format::from_str_loose(&format);
 
             let completion_spec =
-                convert::convert(&openapi, &cli_name, &icon, &alias_list, strategy)
-                    .context("failed to convert spec")?;
+                convert::convert(&openapi, &cli_name, &icon, &alias_list, strategy);
 
             let generated = r#gen::generate(&completion_spec, &output, format)
                 .context("failed to generate completions")?;
@@ -127,8 +126,7 @@ fn main() -> Result<()> {
             let strategy = convert::GroupingStrategy::from_str_loose(&grouping);
 
             let completion_spec =
-                convert::convert(&openapi, &openapi.info.title, "", &[], strategy)
-                    .context("failed to convert spec")?;
+                convert::convert(&openapi, &openapi.info.title, "", &[], strategy);
 
             println!("Name: {}", completion_spec.name);
             println!("Description: {}", completion_spec.description);
