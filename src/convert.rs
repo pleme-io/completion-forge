@@ -751,6 +751,428 @@ paths:
     }
 
     #[test]
+    fn test_auto_strategy_picks_operation_id_when_no_tags() {
+        let spec: OpenApiSpec = serde_yaml_ng::from_str(
+            r#"
+info:
+  title: OpId Only API
+  version: "1.0.0"
+paths:
+  /users:
+    get:
+      operationId: listUsers
+      summary: List users
+    post:
+      operationId: createUser
+      summary: Create user
+  /orders:
+    get:
+      operationId: listOrders
+      summary: List orders
+"#,
+        )
+        .unwrap();
+
+        let result = convert(&spec, "opid-api", "", &[], GroupingStrategy::Auto).unwrap();
+        let group_names: Vec<&str> = result.groups.iter().map(|g| g.name.as_str()).collect();
+        assert!(group_names.contains(&"users"));
+        assert!(group_names.contains(&"orders"));
+        // "user" from createUser after verb stripping
+        assert!(group_names.contains(&"user"));
+    }
+
+    #[test]
+    fn test_operation_id_group_empty_id_returns_default() {
+        assert_eq!(operation_id_group(""), "default");
+    }
+
+    #[test]
+    fn test_operation_id_group_no_verb_prefix() {
+        assert_eq!(operation_id_group("pets"), "pets");
+    }
+
+    #[test]
+    fn test_operation_id_group_standard_verbs() {
+        assert_eq!(operation_id_group("listPets"), "pets");
+        assert_eq!(operation_id_group("getPet"), "pet");
+        assert_eq!(operation_id_group("createUser"), "user");
+        assert_eq!(operation_id_group("deletePet"), "pet");
+        assert_eq!(operation_id_group("updateProfile"), "profile");
+        assert_eq!(operation_id_group("removePet"), "pet");
+        assert_eq!(operation_id_group("addItem"), "item");
+        assert_eq!(operation_id_group("setPref"), "pref");
+        assert_eq!(operation_id_group("findUsers"), "users");
+        assert_eq!(operation_id_group("searchItems"), "items");
+        assert_eq!(operation_id_group("fetchData"), "data");
+    }
+
+    #[test]
+    fn test_group_key_by_operation_id() {
+        let op = RawOp {
+            method: "GET".into(),
+            path: "/pets".into(),
+            operation_id: "listPets".into(),
+            summary: "List pets".into(),
+            tags: vec![],
+            params: vec![],
+            body_fields: vec![],
+        };
+        let key = group_key(&op, GroupingStrategy::ByOperationId);
+        assert_eq!(key, "pets");
+    }
+
+    #[test]
+    fn test_group_key_by_operation_id_empty() {
+        let op = RawOp {
+            method: "GET".into(),
+            path: "/pets".into(),
+            operation_id: String::new(),
+            summary: "List pets".into(),
+            tags: vec![],
+            params: vec![],
+            body_fields: vec![],
+        };
+        let key = group_key(&op, GroupingStrategy::ByOperationId);
+        assert_eq!(key, "default");
+    }
+
+    #[test]
+    fn test_group_key_by_tag_falls_to_path_when_no_tags() {
+        let op = RawOp {
+            method: "GET".into(),
+            path: "/users/{id}".into(),
+            operation_id: "getUser".into(),
+            summary: "Get user".into(),
+            tags: vec![],
+            params: vec![],
+            body_fields: vec![],
+        };
+        let key = group_key(&op, GroupingStrategy::ByTag);
+        assert_eq!(key, "users");
+    }
+
+    #[test]
+    fn test_collect_body_fields_wrong_media_type() {
+        use crate::spec::{MediaType, Operation, RequestBody, Schema};
+        use std::collections::BTreeMap;
+
+        let mut content = BTreeMap::new();
+        content.insert(
+            "application/xml".to_owned(),
+            MediaType {
+                schema: Some(Schema {
+                    schema_type: Some("object".into()),
+                    properties: {
+                        let mut p = BTreeMap::new();
+                        p.insert(
+                            "name".into(),
+                            Schema {
+                                schema_type: Some("string".into()),
+                                ..Schema::default()
+                            },
+                        );
+                        p
+                    },
+                    ..Schema::default()
+                }),
+            },
+        );
+
+        let op = Operation {
+            operation_id: None,
+            summary: None,
+            description: None,
+            parameters: vec![],
+            request_body: Some(RequestBody {
+                required: false,
+                content,
+                description: None,
+                ref_path: None,
+            }),
+            responses: BTreeMap::new(),
+            security: vec![],
+            tags: vec![],
+        };
+
+        let fields = collect_body_fields(&op);
+        assert!(fields.is_empty());
+    }
+
+    #[test]
+    fn test_collect_body_fields_no_schema() {
+        use crate::spec::{MediaType, Operation, RequestBody};
+        use std::collections::BTreeMap;
+
+        let mut content = BTreeMap::new();
+        content.insert(
+            "application/json".to_owned(),
+            MediaType { schema: None },
+        );
+
+        let op = Operation {
+            operation_id: None,
+            summary: None,
+            description: None,
+            parameters: vec![],
+            request_body: Some(RequestBody {
+                required: false,
+                content,
+                description: None,
+                ref_path: None,
+            }),
+            responses: BTreeMap::new(),
+            security: vec![],
+            tags: vec![],
+        };
+
+        let fields = collect_body_fields(&op);
+        assert!(fields.is_empty());
+    }
+
+    #[test]
+    fn test_collect_body_fields_empty_properties() {
+        use crate::spec::{MediaType, Operation, RequestBody, Schema};
+        use std::collections::BTreeMap;
+
+        let mut content = BTreeMap::new();
+        content.insert(
+            "application/json".to_owned(),
+            MediaType {
+                schema: Some(Schema {
+                    schema_type: Some("object".into()),
+                    properties: BTreeMap::new(),
+                    ..Schema::default()
+                }),
+            },
+        );
+
+        let op = Operation {
+            operation_id: None,
+            summary: None,
+            description: None,
+            parameters: vec![],
+            request_body: Some(RequestBody {
+                required: false,
+                content,
+                description: None,
+                ref_path: None,
+            }),
+            responses: BTreeMap::new(),
+            security: vec![],
+            tags: vec![],
+        };
+
+        let fields = collect_body_fields(&op);
+        assert!(fields.is_empty());
+    }
+
+    #[test]
+    fn test_duplicate_flag_names_first_wins() {
+        let spec: OpenApiSpec = serde_yaml_ng::from_str(
+            r#"
+info:
+  title: Dup Flags
+  version: "1.0.0"
+paths:
+  /items:
+    parameters:
+      - name: limit
+        in: query
+        required: true
+        description: Path-level limit
+    get:
+      operationId: listItems
+      summary: List items
+      tags: [items]
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Op-level limit
+"#,
+        )
+        .unwrap();
+
+        let result = convert(&spec, "test", "", &[], GroupingStrategy::ByTag).unwrap();
+        let items = result.groups.iter().find(|g| g.name == "items").unwrap();
+        let limit_flags: Vec<&CompletionFlag> =
+            items.flags.iter().filter(|f| f.name == "limit").collect();
+        assert_eq!(limit_flags.len(), 1, "duplicate flags should be deduplicated");
+        assert!(
+            limit_flags[0].required,
+            "first occurrence (path-level, required=true) should win"
+        );
+    }
+
+    #[test]
+    fn test_description_uses_info_title_when_no_description() {
+        let spec: OpenApiSpec = serde_yaml_ng::from_str(
+            r#"
+info:
+  title: My Title
+  version: "1.0.0"
+paths: {}
+"#,
+        )
+        .unwrap();
+
+        let result = convert(&spec, "test", "", &[], GroupingStrategy::Auto).unwrap();
+        assert_eq!(result.description, "My Title");
+    }
+
+    #[test]
+    fn test_description_uses_info_description_when_present() {
+        let spec: OpenApiSpec = serde_yaml_ng::from_str(
+            r#"
+info:
+  title: My Title
+  description: My Description
+  version: "1.0.0"
+paths: {}
+"#,
+        )
+        .unwrap();
+
+        let result = convert(&spec, "test", "", &[], GroupingStrategy::Auto).unwrap();
+        assert_eq!(result.description, "My Description");
+    }
+
+    #[test]
+    fn test_single_op_group_uses_summary_not_format() {
+        let spec: OpenApiSpec = serde_yaml_ng::from_str(
+            r#"
+info:
+  title: Single Op
+  version: "1.0.0"
+paths:
+  /health:
+    get:
+      operationId: healthCheck
+      summary: Check service health
+      tags: [monitoring]
+"#,
+        )
+        .unwrap();
+
+        let result = convert(&spec, "test", "", &[], GroupingStrategy::ByTag).unwrap();
+        let monitoring = result
+            .groups
+            .iter()
+            .find(|g| g.name == "monitoring")
+            .unwrap();
+        assert_eq!(monitoring.description, "Check service health");
+    }
+
+    #[test]
+    fn test_multi_op_group_uses_formatted_description() {
+        let spec = petstore_spec();
+        let result = convert(&spec, "test", "", &[], GroupingStrategy::ByTag).unwrap();
+        let pets = result.groups.iter().find(|g| g.name == "pets").unwrap();
+        assert_eq!(pets.description, "Pets operations");
+    }
+
+    #[test]
+    fn test_format_group_description_empty() {
+        assert_eq!(format_group_description(""), " operations");
+    }
+
+    #[test]
+    fn test_path_group_only_params() {
+        assert_eq!(path_group("/{id}"), "default");
+    }
+
+    #[test]
+    fn test_path_group_nested() {
+        assert_eq!(path_group("/api/v1/users/{userId}/posts"), "api");
+    }
+
+    #[test]
+    fn test_strip_verb_prefix_all_verbs() {
+        assert_eq!(strip_verb_prefix("removePet"), "Pet");
+        assert_eq!(strip_verb_prefix("addItem"), "Item");
+        assert_eq!(strip_verb_prefix("setConfig"), "Config");
+        assert_eq!(strip_verb_prefix("putResource"), "Resource");
+        assert_eq!(strip_verb_prefix("patchField"), "Field");
+        assert_eq!(strip_verb_prefix("postData"), "Data");
+        assert_eq!(strip_verb_prefix("findUser"), "User");
+        assert_eq!(strip_verb_prefix("searchResult"), "Result");
+        assert_eq!(strip_verb_prefix("fetchItem"), "Item");
+    }
+
+    #[test]
+    fn test_op_name_multi_segment_path() {
+        assert_eq!(op_name("", "/api/v1/users", "GET"), "get-api-v1-users");
+    }
+
+    #[test]
+    fn test_op_name_path_with_only_params() {
+        assert_eq!(op_name("", "/{id}", "DELETE"), "delete");
+    }
+
+    #[test]
+    fn test_grouping_strategy_from_str_aliases() {
+        assert!(matches!(
+            GroupingStrategy::from_str_loose("tags"),
+            GroupingStrategy::ByTag
+        ));
+        assert!(matches!(
+            GroupingStrategy::from_str_loose("by-tag"),
+            GroupingStrategy::ByTag
+        ));
+        assert!(matches!(
+            GroupingStrategy::from_str_loose("paths"),
+            GroupingStrategy::ByPath
+        ));
+        assert!(matches!(
+            GroupingStrategy::from_str_loose("operation"),
+            GroupingStrategy::ByOperationId
+        ));
+        assert!(matches!(
+            GroupingStrategy::from_str_loose("by-operation-id"),
+            GroupingStrategy::ByOperationId
+        ));
+    }
+
+    #[test]
+    fn test_grouping_strategy_from_str_case_insensitive() {
+        assert!(matches!(
+            GroupingStrategy::from_str_loose("TAG"),
+            GroupingStrategy::ByTag
+        ));
+        assert!(matches!(
+            GroupingStrategy::from_str_loose("Path"),
+            GroupingStrategy::ByPath
+        ));
+        assert!(matches!(
+            GroupingStrategy::from_str_loose("OPERATION-ID"),
+            GroupingStrategy::ByOperationId
+        ));
+    }
+
+    #[test]
+    fn test_collect_params_empty() {
+        let result = collect_params(&[], &[]);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_collect_params_description_fallback() {
+        use crate::spec::Parameter;
+
+        let params = vec![Parameter {
+            name: "id".into(),
+            location: "path".into(),
+            required: true,
+            description: None,
+            schema: None,
+            ref_path: None,
+        }];
+
+        let result = collect_params(&params, &[]);
+        assert_eq!(result[0].description, "");
+    }
+
+    #[test]
     fn test_convert_operation_without_id_or_tags_uses_path() {
         // No operation IDs, no tags — everything must fall back to path-based naming.
         let spec: OpenApiSpec = serde_yaml_ng::from_str(

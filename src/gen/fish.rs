@@ -229,6 +229,122 @@ mod tests {
     }
 
     #[test]
+    fn shell_quote_with_double_quotes() {
+        let result = shell_quote("it's a \"test\"");
+        assert_eq!(result, "\"it's a \\\"test\\\"\"");
+    }
+
+    #[test]
+    fn shell_quote_empty_string() {
+        assert_eq!(shell_quote(""), "''");
+    }
+
+    #[test]
+    fn shell_quote_special_characters() {
+        assert_eq!(shell_quote("hello world"), "'hello world'");
+        assert_eq!(shell_quote("a\tb"), "'a\tb'");
+        assert_eq!(shell_quote("$var"), "'$var'");
+        assert_eq!(shell_quote("a&b"), "'a&b'");
+    }
+
+    #[test]
+    fn generate_multiple_groups() {
+        let dir = tempfile::tempdir().unwrap();
+        let spec = CompletionSpec {
+            name: "multi".into(),
+            icon: String::new(),
+            aliases: vec![],
+            description: "Multiple groups".into(),
+            groups: vec![
+                CommandGroup {
+                    name: "users".into(),
+                    description: "User operations".into(),
+                    glyph: Glyph::View,
+                    operations: vec![CompletionOp {
+                        name: "list-users".into(),
+                        description: "List users".into(),
+                        method: "GET".into(),
+                    }],
+                    flags: vec![CompletionFlag {
+                        name: "limit".into(),
+                        description: "Max results".into(),
+                        required: false,
+                    }],
+                },
+                CommandGroup {
+                    name: "orders".into(),
+                    description: "Order operations".into(),
+                    glyph: Glyph::Create,
+                    operations: vec![CompletionOp {
+                        name: "create-order".into(),
+                        description: "Create order".into(),
+                        method: "POST".into(),
+                    }],
+                    flags: vec![CompletionFlag {
+                        name: "product".into(),
+                        description: "Product ID".into(),
+                        required: true,
+                    }],
+                },
+            ],
+        };
+
+        let path = generate(&spec, dir.path()).unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("-a 'users'"));
+        assert!(content.contains("-a 'orders'"));
+        assert!(content.contains("-l 'limit'"));
+        assert!(content.contains("-l 'product'"));
+        assert!(content.contains("-r -l 'product'"));
+    }
+
+    #[test]
+    fn generate_glyph_in_description() {
+        let dir = tempfile::tempdir().unwrap();
+        let spec = CompletionSpec {
+            name: "glyphtest".into(),
+            icon: String::new(),
+            aliases: vec![],
+            description: "Glyph test".into(),
+            groups: vec![CommandGroup {
+                name: "data".into(),
+                description: "Data ops".into(),
+                glyph: Glyph::Update,
+                operations: vec![],
+                flags: vec![],
+            }],
+        };
+
+        let path = generate(&spec, dir.path()).unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("\u{21BB}"), "should contain Update glyph ↻");
+    }
+
+    #[test]
+    fn generate_fish_multiple_aliases() {
+        let dir = tempfile::tempdir().unwrap();
+        let spec = CompletionSpec {
+            name: "tool".into(),
+            icon: String::new(),
+            aliases: vec!["t".into(), "tl".into()],
+            description: "Tool".into(),
+            groups: vec![CommandGroup {
+                name: "stuff".into(),
+                description: "Stuff".into(),
+                glyph: Glyph::Manage,
+                operations: vec![],
+                flags: vec![],
+            }],
+        };
+
+        let path = generate(&spec, dir.path()).unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("complete -c tool"));
+        assert!(content.contains("complete -c t "));
+        assert!(content.contains("complete -c tl "));
+    }
+
+    #[test]
     fn test_generate_no_aliases_no_extra_blank_lines() {
         let dir = tempfile::tempdir().unwrap();
         let spec = CompletionSpec {
