@@ -2,8 +2,9 @@
 
 pub use sekkei::*;
 
-// completion-forge-specific extension: iterate operations on a PathItem.
+/// Extension trait for iterating HTTP operations on a `PathItem`.
 pub trait PathItemExt {
+    /// Returns a list of `(HTTP_METHOD, Operation)` pairs present on this path item.
     fn operations(&self) -> Vec<(&str, &sekkei::Operation)>;
 }
 
