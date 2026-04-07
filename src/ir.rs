@@ -1,13 +1,14 @@
 // Intermediate representation for shell completions.
 
 use std::fmt;
+use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
 // ── Top-level IR ───────────────────────────────────────────────────────────
 
 /// A complete completion spec for a single CLI tool.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CompletionSpec {
     /// CLI command name (e.g., "petstore").
     pub name: String,
@@ -22,7 +23,7 @@ pub struct CompletionSpec {
 }
 
 /// A group of related operations, mapped to a CLI subcommand.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CommandGroup {
     /// Subcommand name (kebab-case).
     pub name: String,
@@ -37,7 +38,7 @@ pub struct CommandGroup {
 }
 
 /// A single completable operation.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CompletionOp {
     /// Operation name (e.g., "list-pets").
     pub name: String,
@@ -48,7 +49,7 @@ pub struct CompletionOp {
 }
 
 /// A completable flag/option.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CompletionFlag {
     /// Flag name without dashes (e.g., "limit").
     pub name: String,
@@ -61,7 +62,8 @@ pub struct CompletionFlag {
 // ── Glyph ─────────────────────────────────────────────────────────────────
 
 /// Category glyph, auto-assigned based on HTTP method mix.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum Glyph {
     /// Read/inspect operations (all GET).
     View,
@@ -72,6 +74,7 @@ pub enum Glyph {
     /// Delete operations (all DELETE).
     Delete,
     /// Mixed operations.
+    #[default]
     Manage,
     /// Execute/action operations.
     Execute,
@@ -118,6 +121,23 @@ impl Glyph {
 impl fmt::Display for Glyph {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.as_char())
+    }
+}
+
+impl FromStr for Glyph {
+    type Err = crate::error::ParseEnumError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "view" => Ok(Self::View),
+            "create" => Ok(Self::Create),
+            "update" => Ok(Self::Update),
+            "delete" => Ok(Self::Delete),
+            "manage" => Ok(Self::Manage),
+            "execute" => Ok(Self::Execute),
+            _ if !s.is_empty() => Ok(Self::Custom(s.to_owned())),
+            _ => Err(crate::error::ParseEnumError(s.to_owned())),
+        }
     }
 }
 
@@ -428,5 +448,25 @@ mod tests {
         let yaml = serde_yaml_ng::to_string(&spec).unwrap();
         let parsed: CompletionSpec = serde_yaml_ng::from_str(&yaml).unwrap();
         assert_eq!(parsed, spec);
+    }
+
+    #[test]
+    fn glyph_from_str_named_variants() {
+        assert_eq!("view".parse::<Glyph>().unwrap(), Glyph::View);
+        assert_eq!("CREATE".parse::<Glyph>().unwrap(), Glyph::Create);
+        assert_eq!("Update".parse::<Glyph>().unwrap(), Glyph::Update);
+        assert_eq!("delete".parse::<Glyph>().unwrap(), Glyph::Delete);
+        assert_eq!("manage".parse::<Glyph>().unwrap(), Glyph::Manage);
+        assert_eq!("execute".parse::<Glyph>().unwrap(), Glyph::Execute);
+    }
+
+    #[test]
+    fn glyph_from_str_custom() {
+        assert_eq!("★".parse::<Glyph>().unwrap(), Glyph::Custom("★".into()));
+    }
+
+    #[test]
+    fn glyph_from_str_empty_errors() {
+        assert!("".parse::<Glyph>().is_err());
     }
 }
