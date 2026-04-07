@@ -1,6 +1,8 @@
 // Generator dispatcher — routes to format-specific generators.
 
+/// Fish shell completion generator.
 pub mod fish;
+/// Skim-tab YAML completion generator.
 pub mod skim_tab;
 
 use std::fmt;
@@ -13,8 +15,11 @@ use crate::ir::CompletionSpec;
 /// Output format for generated completions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Format {
+    /// Skim-tab YAML format.
     SkimTab,
+    /// Fish shell completion format.
     Fish,
+    /// Generate all supported formats.
     All,
 }
 
