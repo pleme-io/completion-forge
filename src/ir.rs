@@ -313,4 +313,120 @@ mod tests {
         assert_eq!(parsed.groups.len(), 1);
         assert_eq!(parsed.groups[0].operations.len(), 1);
     }
+
+    #[test]
+    fn completion_flag_serde_roundtrip() {
+        let flag = CompletionFlag {
+            name: "verbose".into(),
+            description: "Enable verbose output".into(),
+            required: false,
+        };
+        let json = serde_json::to_string(&flag).unwrap();
+        let parsed: CompletionFlag = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, flag);
+    }
+
+    #[test]
+    fn completion_op_serde_roundtrip() {
+        let op = CompletionOp {
+            name: "list-users".into(),
+            description: "List all users".into(),
+            method: "GET".into(),
+        };
+        let json = serde_json::to_string(&op).unwrap();
+        let parsed: CompletionOp = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, op);
+    }
+
+    #[test]
+    fn command_group_serde_roundtrip() {
+        let group = CommandGroup {
+            name: "users".into(),
+            description: "User operations".into(),
+            glyph: Glyph::Manage,
+            operations: vec![
+                CompletionOp {
+                    name: "list".into(),
+                    description: "List users".into(),
+                    method: "GET".into(),
+                },
+                CompletionOp {
+                    name: "create".into(),
+                    description: "Create user".into(),
+                    method: "POST".into(),
+                },
+            ],
+            flags: vec![CompletionFlag {
+                name: "limit".into(),
+                description: "Max results".into(),
+                required: false,
+            }],
+        };
+        let json = serde_json::to_string(&group).unwrap();
+        let parsed: CommandGroup = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, group);
+    }
+
+    #[test]
+    fn glyph_from_put_and_patch_mixed() {
+        assert_eq!(Glyph::from_methods(&["PUT", "PATCH"]), Glyph::Manage);
+    }
+
+    #[test]
+    fn glyph_custom_equality() {
+        let a = Glyph::Custom("★".into());
+        let b = Glyph::Custom("★".into());
+        let c = Glyph::Custom("✦".into());
+        assert_eq!(a, b);
+        assert_ne!(a, c);
+    }
+
+    #[test]
+    fn glyph_clone() {
+        let original = Glyph::Custom("test".into());
+        let cloned = original.clone();
+        assert_eq!(original, cloned);
+    }
+
+    #[test]
+    fn completion_spec_yaml_roundtrip_with_multiple_groups() {
+        let spec = CompletionSpec {
+            name: "multi".into(),
+            icon: "⚡".into(),
+            aliases: vec!["m".into(), "mu".into()],
+            description: "Multi-group test".into(),
+            groups: vec![
+                CommandGroup {
+                    name: "users".into(),
+                    description: "User ops".into(),
+                    glyph: Glyph::View,
+                    operations: vec![CompletionOp {
+                        name: "list".into(),
+                        description: "List".into(),
+                        method: "GET".into(),
+                    }],
+                    flags: vec![],
+                },
+                CommandGroup {
+                    name: "orders".into(),
+                    description: "Order ops".into(),
+                    glyph: Glyph::Create,
+                    operations: vec![CompletionOp {
+                        name: "create".into(),
+                        description: "Create".into(),
+                        method: "POST".into(),
+                    }],
+                    flags: vec![CompletionFlag {
+                        name: "product".into(),
+                        description: "Product ID".into(),
+                        required: true,
+                    }],
+                },
+            ],
+        };
+
+        let yaml = serde_yaml_ng::to_string(&spec).unwrap();
+        let parsed: CompletionSpec = serde_yaml_ng::from_str(&yaml).unwrap();
+        assert_eq!(parsed, spec);
+    }
 }
