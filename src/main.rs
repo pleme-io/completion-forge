@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use completion_forge::{convert, r#gen, spec};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
 #[command(
@@ -59,6 +59,19 @@ enum Command {
     },
 }
 
+fn load_spec(path: &Path) -> Result<spec::OpenApiSpec> {
+    let content = std::fs::read_to_string(path)
+        .with_context(|| format!("failed to read spec: {}", path.display()))?;
+
+    let openapi = if path.extension().is_some_and(|e| e == "json") {
+        serde_json::from_str(&content)?
+    } else {
+        serde_yaml_ng::from_str(&content)?
+    };
+
+    Ok(openapi)
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -72,14 +85,7 @@ fn main() -> Result<()> {
             format,
             grouping,
         } => {
-            let content = std::fs::read_to_string(&spec)
-                .with_context(|| format!("failed to read spec: {}", spec.display()))?;
-
-            let openapi: spec::OpenApiSpec = if spec.extension().is_some_and(|e| e == "json") {
-                serde_json::from_str(&content)?
-            } else {
-                serde_yaml_ng::from_str(&content)?
-            };
+            let openapi = load_spec(&spec)?;
 
             let cli_name = name.unwrap_or_else(|| {
                 use heck::ToKebabCase;
@@ -99,8 +105,7 @@ fn main() -> Result<()> {
             let completion_spec =
                 convert::convert(&openapi, &cli_name, &icon, &alias_list, strategy);
 
-            let generated = r#gen::generate(&completion_spec, &output, format)
-                .context("failed to generate completions")?;
+            let generated = r#gen::generate(&completion_spec, &output, format)?;
 
             for path in &generated {
                 println!("Generated: {path}");
@@ -114,14 +119,7 @@ fn main() -> Result<()> {
         }
 
         Command::Inspect { spec, grouping } => {
-            let content = std::fs::read_to_string(&spec)
-                .with_context(|| format!("failed to read spec: {}", spec.display()))?;
-
-            let openapi: spec::OpenApiSpec = if spec.extension().is_some_and(|e| e == "json") {
-                serde_json::from_str(&content)?
-            } else {
-                serde_yaml_ng::from_str(&content)?
-            };
+            let openapi = load_spec(&spec)?;
 
             let strategy = convert::GroupingStrategy::from_str_loose(&grouping);
 

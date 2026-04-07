@@ -10,23 +10,16 @@ pub trait PathItemExt {
 
 impl PathItemExt for sekkei::PathItem {
     fn operations(&self) -> Vec<(&str, &sekkei::Operation)> {
-        let mut ops = Vec::new();
-        if let Some(ref op) = self.get {
-            ops.push(("GET", op));
-        }
-        if let Some(ref op) = self.post {
-            ops.push(("POST", op));
-        }
-        if let Some(ref op) = self.put {
-            ops.push(("PUT", op));
-        }
-        if let Some(ref op) = self.delete {
-            ops.push(("DELETE", op));
-        }
-        if let Some(ref op) = self.patch {
-            ops.push(("PATCH", op));
-        }
-        ops
+        [
+            ("GET", &self.get),
+            ("POST", &self.post),
+            ("PUT", &self.put),
+            ("DELETE", &self.delete),
+            ("PATCH", &self.patch),
+        ]
+        .into_iter()
+        .filter_map(|(method, opt)| opt.as_ref().map(|op| (method, op)))
+        .collect()
     }
 }
 
