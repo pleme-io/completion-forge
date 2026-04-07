@@ -4,6 +4,8 @@
 
 /// `OpenAPI` spec → completion IR conversion (grouping strategies, converter trait).
 pub mod convert;
+/// Typed error types for completion-forge.
+pub mod error;
 /// Output generators (skim-tab YAML, fish shell).
 pub mod r#gen;
 /// Intermediate representation types for shell completions.
