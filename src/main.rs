@@ -1,11 +1,7 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+use completion_forge::{convert, r#gen, spec};
 use std::path::PathBuf;
-
-pub mod convert;
-pub mod r#gen;
-pub mod ir;
-pub mod spec;
 
 #[derive(Parser)]
 #[command(
