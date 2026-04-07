@@ -20,9 +20,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Generate shell completion files from an OpenAPI spec
+    /// Generate shell completion files from an `OpenAPI` spec
     Generate {
-        /// Path to the OpenAPI YAML or JSON spec file
+        /// Path to the `OpenAPI` YAML or JSON spec file
         #[arg(long, short)]
         spec: PathBuf,
 
@@ -53,7 +53,7 @@ enum Command {
 
     /// Parse and display grouped operations summary (for debugging)
     Inspect {
-        /// Path to the OpenAPI spec file
+        /// Path to the `OpenAPI` spec file
         #[arg(long, short)]
         spec: PathBuf,
 

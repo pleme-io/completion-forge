@@ -106,9 +106,8 @@ impl Glyph {
     pub fn as_char(&self) -> &str {
         match self {
             Self::View => "\u{25C8}",    // ◈
-            Self::Create => "\u{25C7}",  // ◇
-            Self::Update => "\u{21BB}",  // ↻
-            Self::Delete => "\u{25C7}",  // ◇
+            Self::Create | Self::Delete => "\u{25C7}", // ◇
+            Self::Update => "\u{21BB}",               // ↻
             Self::Manage => "\u{2299}",  // ⊙
             Self::Execute => "\u{25B8}", // ▸
             Self::Custom(s) => s,
