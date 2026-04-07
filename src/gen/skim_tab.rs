@@ -24,7 +24,7 @@ use crate::ir::CompletionSpec;
 #[cfg_attr(test, derive(serde::Deserialize))]
 struct SkimTabSpec {
     commands: Vec<String>,
-    #[serde(skip_serializing_if = "String::is_empty")]
+    #[serde(skip_serializing_if = "String::is_empty", default)]
     icon: String,
     subcommands: BTreeMap<String, SkimTabSubcommand>,
 }
