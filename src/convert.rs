@@ -1202,4 +1202,165 @@ paths:
         assert!(op_names.contains(&"get-items"));
         assert!(op_names.contains(&"delete-items"));
     }
+
+    #[test]
+    fn grouping_strategy_default_is_auto() {
+        let strategy: GroupingStrategy = GroupingStrategy::default();
+        assert!(matches!(strategy, GroupingStrategy::Auto));
+    }
+
+    #[test]
+    fn build_group_single_op_uses_summary() {
+        let ops = vec![RawOp {
+            method: "GET".into(),
+            path: "/health".into(),
+            operation_id: "healthCheck".into(),
+            summary: "Health check endpoint".into(),
+            tags: vec![],
+            params: vec![],
+            body_fields: vec![],
+        }];
+        let group = build_group("health".into(), &ops);
+        assert_eq!(group.name, "health");
+        assert_eq!(group.description, "Health check endpoint");
+        assert_eq!(group.glyph, Glyph::View);
+        assert_eq!(group.operations.len(), 1);
+        assert_eq!(group.operations[0].name, "health-check");
+    }
+
+    #[test]
+    fn build_group_multiple_ops_uses_formatted_desc() {
+        let ops = vec![
+            RawOp {
+                method: "GET".into(),
+                path: "/items".into(),
+                operation_id: "listItems".into(),
+                summary: "List items".into(),
+                tags: vec![],
+                params: vec![],
+                body_fields: vec![],
+            },
+            RawOp {
+                method: "POST".into(),
+                path: "/items".into(),
+                operation_id: "createItem".into(),
+                summary: "Create item".into(),
+                tags: vec![],
+                params: vec![],
+                body_fields: vec![],
+            },
+        ];
+        let group = build_group("items".into(), &ops);
+        assert_eq!(group.description, "Items operations");
+        assert_eq!(group.glyph, Glyph::Manage);
+        assert_eq!(group.operations.len(), 2);
+    }
+
+    #[test]
+    fn build_group_deduplicates_flags() {
+        let ops = vec![
+            RawOp {
+                method: "GET".into(),
+                path: "/items".into(),
+                operation_id: "listItems".into(),
+                summary: "List".into(),
+                tags: vec![],
+                params: vec![RawParam {
+                    name: "limit".into(),
+                    description: "First limit".into(),
+                    required: true,
+                }],
+                body_fields: vec![],
+            },
+            RawOp {
+                method: "POST".into(),
+                path: "/items".into(),
+                operation_id: "createItem".into(),
+                summary: "Create".into(),
+                tags: vec![],
+                params: vec![RawParam {
+                    name: "limit".into(),
+                    description: "Second limit".into(),
+                    required: false,
+                }],
+                body_fields: vec![],
+            },
+        ];
+        let group = build_group("items".into(), &ops);
+        let limit_flags: Vec<_> = group.flags.iter().filter(|f| f.name == "limit").collect();
+        assert_eq!(limit_flags.len(), 1, "duplicate flags should be deduplicated");
+        assert!(limit_flags[0].required, "first occurrence should win");
+        assert_eq!(limit_flags[0].description, "First limit");
+    }
+
+    #[test]
+    fn build_group_collects_body_fields_as_flags() {
+        let ops = vec![RawOp {
+            method: "POST".into(),
+            path: "/items".into(),
+            operation_id: "createItem".into(),
+            summary: "Create".into(),
+            tags: vec![],
+            params: vec![],
+            body_fields: vec![
+                RawParam {
+                    name: "title".into(),
+                    description: "Item title".into(),
+                    required: false,
+                },
+                RawParam {
+                    name: "count".into(),
+                    description: "Item count".into(),
+                    required: false,
+                },
+            ],
+        }];
+        let group = build_group("items".into(), &ops);
+        assert_eq!(group.flags.len(), 2);
+        let flag_names: Vec<&str> = group.flags.iter().map(|f| f.name.as_str()).collect();
+        assert!(flag_names.contains(&"title"));
+        assert!(flag_names.contains(&"count"));
+    }
+
+    #[test]
+    fn build_group_empty_ops() {
+        let group = build_group("empty".into(), &[]);
+        assert_eq!(group.name, "empty");
+        assert_eq!(group.description, "");
+        assert_eq!(group.glyph, Glyph::Manage);
+        assert!(group.operations.is_empty());
+        assert!(group.flags.is_empty());
+    }
+
+    #[test]
+    fn convert_preserves_operation_methods() {
+        let spec: OpenApiSpec = serde_yaml_ng::from_str(
+            r#"
+info:
+  title: Methods API
+  version: "1.0.0"
+paths:
+  /items:
+    get:
+      operationId: listItems
+      summary: List items
+      tags: [items]
+    post:
+      operationId: createItem
+      summary: Create item
+      tags: [items]
+    put:
+      operationId: updateItem
+      summary: Update item
+      tags: [items]
+"#,
+        )
+        .unwrap();
+        let result = convert(&spec, "test", "", &[], GroupingStrategy::ByTag).unwrap();
+        let items = result.groups.iter().find(|g| g.name == "items").unwrap();
+        let methods: Vec<&str> = items.operations.iter().map(|o| o.method.as_str()).collect();
+        assert!(methods.contains(&"GET"));
+        assert!(methods.contains(&"POST"));
+        assert!(methods.contains(&"PUT"));
+    }
 }

@@ -274,4 +274,53 @@ mod tests {
         assert_eq!(Format::from_str_loose("ALL"), Format::All);
         assert_eq!(Format::from_str_loose("Skim-Tab"), Format::SkimTab);
     }
+
+    struct FailingGenerator;
+    impl OutputGenerator for FailingGenerator {
+        fn format_name(&self) -> &'static str {
+            "failing"
+        }
+        fn generate(&self, _spec: &CompletionSpec, _output: &Path) -> Result<String> {
+            anyhow::bail!("intentional failure")
+        }
+    }
+
+    #[test]
+    fn failing_generator_returns_error() {
+        let spec = sample_spec();
+        let dir = tempfile::tempdir().unwrap();
+        let generator: &dyn OutputGenerator = &FailingGenerator;
+        let result = generator.generate(&spec, dir.path());
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.unwrap_err());
+        assert!(err_msg.contains("intentional failure"));
+    }
+
+    #[test]
+    fn format_eq_and_copy() {
+        let a = Format::SkimTab;
+        let b = a;
+        assert_eq!(a, b);
+        assert_ne!(Format::Fish, Format::All);
+    }
+
+    #[test]
+    fn format_debug() {
+        let debug = format!("{:?}", Format::SkimTab);
+        assert!(debug.contains("SkimTab"));
+    }
+
+    #[test]
+    fn generate_empty_spec() {
+        let dir = tempfile::tempdir().unwrap();
+        let spec = CompletionSpec {
+            name: "empty".into(),
+            icon: String::new(),
+            aliases: vec![],
+            description: "Empty".into(),
+            groups: vec![],
+        };
+        let result = generate(&spec, dir.path(), Format::All).unwrap();
+        assert_eq!(result.len(), 2);
+    }
 }
