@@ -376,4 +376,47 @@ mod tests {
             "should not have triple newlines (extra blank lines): {content:?}"
         );
     }
+
+    #[test]
+    fn shell_quote_unicode() {
+        assert_eq!(shell_quote("◈ View ops"), "'◈ View ops'");
+    }
+
+    #[test]
+    fn shell_quote_newline() {
+        assert_eq!(shell_quote("line1\nline2"), "'line1\nline2'");
+    }
+
+    #[test]
+    fn generate_fish_ends_with_newline() {
+        let dir = tempfile::tempdir().unwrap();
+        let spec = sample_spec();
+        let path = generate(&spec, dir.path()).unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.ends_with('\n'), "fish file should end with newline");
+    }
+
+    #[test]
+    fn generate_fish_subcommand_description_includes_glyph() {
+        let dir = tempfile::tempdir().unwrap();
+        let spec = CompletionSpec {
+            name: "test".into(),
+            icon: String::new(),
+            aliases: vec![],
+            description: "Test".into(),
+            groups: vec![CommandGroup {
+                name: "items".into(),
+                description: "Item operations".into(),
+                glyph: Glyph::Execute,
+                operations: vec![],
+                flags: vec![],
+            }],
+        };
+        let path = generate(&spec, dir.path()).unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            content.contains("\u{25B8} Item operations"),
+            "description should include glyph: {content}"
+        );
+    }
 }

@@ -315,4 +315,75 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn yaml_subcommand_descriptions_preserved() {
+        let dir = tempfile::tempdir().unwrap();
+        let spec = CompletionSpec {
+            name: "desc-test".into(),
+            icon: "★".into(),
+            aliases: vec![],
+            description: "Test".into(),
+            groups: vec![CommandGroup {
+                name: "things".into(),
+                description: "Manage all the things".into(),
+                glyph: Glyph::Manage,
+                operations: vec![],
+                flags: vec![],
+            }],
+        };
+        let path = generate(&spec, dir.path()).unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
+        let parsed: SkimTabSpec = serde_yaml_ng::from_str(&content).unwrap();
+        assert_eq!(
+            parsed.subcommands["things"].description,
+            "Manage all the things"
+        );
+    }
+
+    #[test]
+    fn yaml_output_is_deterministic() {
+        let dir = tempfile::tempdir().unwrap();
+        let spec = sample_spec();
+        let path1 = generate(&spec, dir.path()).unwrap();
+        let content1 = std::fs::read_to_string(&path1).unwrap();
+        let path2 = generate(&spec, dir.path()).unwrap();
+        let content2 = std::fs::read_to_string(&path2).unwrap();
+        assert_eq!(content1, content2, "YAML output should be deterministic");
+    }
+
+    #[test]
+    fn yaml_subcommands_sorted_by_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let spec = CompletionSpec {
+            name: "sorted".into(),
+            icon: String::new(),
+            aliases: vec![],
+            description: "Sort test".into(),
+            groups: vec![
+                CommandGroup {
+                    name: "zebra".into(),
+                    description: "Z ops".into(),
+                    glyph: Glyph::View,
+                    operations: vec![],
+                    flags: vec![],
+                },
+                CommandGroup {
+                    name: "alpha".into(),
+                    description: "A ops".into(),
+                    glyph: Glyph::Create,
+                    operations: vec![],
+                    flags: vec![],
+                },
+            ],
+        };
+        let path = generate(&spec, dir.path()).unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
+        let alpha_pos = content.find("alpha:").unwrap();
+        let zebra_pos = content.find("zebra:").unwrap();
+        assert!(
+            alpha_pos < zebra_pos,
+            "subcommands should be sorted alphabetically (BTreeMap)"
+        );
+    }
 }
