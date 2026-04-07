@@ -3,7 +3,6 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-use anyhow::Result;
 use heck::ToKebabCase;
 
 use crate::ir::{CommandGroup, CompletionFlag, CompletionOp, CompletionSpec, Glyph};
@@ -56,10 +55,7 @@ impl fmt::Display for GroupingStrategy {
 /// Trait for converting an `OpenAPI` spec into a `CompletionSpec`.
 pub trait Converter: Send + Sync {
     /// Perform the conversion.
-    ///
-    /// # Errors
-    /// Returns an error if the spec cannot be converted.
-    fn convert(&self, spec: &OpenApiSpec) -> Result<CompletionSpec>;
+    fn convert(&self, spec: &OpenApiSpec) -> CompletionSpec;
 }
 
 /// Default converter that delegates to the free `convert()` function.
@@ -75,22 +71,20 @@ pub struct DefaultConverter {
 }
 
 impl Converter for DefaultConverter {
-    fn convert(&self, spec: &OpenApiSpec) -> Result<CompletionSpec> {
+    fn convert(&self, spec: &OpenApiSpec) -> CompletionSpec {
         convert(spec, &self.name, &self.icon, &self.aliases, self.strategy)
     }
 }
 
 /// Convert an `OpenAPI` spec into a `CompletionSpec`.
-///
-/// # Errors
-/// Returns an error if the spec cannot be converted.
+#[must_use]
 pub fn convert(
     spec: &OpenApiSpec,
     name: &str,
     icon: &str,
     aliases: &[String],
     strategy: GroupingStrategy,
-) -> Result<CompletionSpec> {
+) -> CompletionSpec {
     // Collect all operations with their metadata.
     let mut raw_ops: Vec<RawOp> = Vec::new();
     for (path, item) in &spec.paths {
@@ -139,7 +133,7 @@ pub fn convert(
         .map(|(name, ops)| build_group(name, &ops))
         .collect();
 
-    Ok(CompletionSpec {
+    CompletionSpec {
         name: name.to_owned(),
         icon: icon.to_owned(),
         aliases: aliases.to_vec(),
@@ -149,7 +143,7 @@ pub fn convert(
             .clone()
             .unwrap_or_else(|| spec.info.title.clone()),
         groups,
-    })
+    }
 }
 
 // ── Internal types ────────────────────────────────────────────────────────
@@ -402,7 +396,7 @@ paths:
     #[test]
     fn convert_by_tag() {
         let spec = petstore_spec();
-        let result = convert(&spec, "petstore", "\u{2601}", &[], GroupingStrategy::ByTag).unwrap();
+        let result = convert(&spec, "petstore", "\u{2601}", &[], GroupingStrategy::ByTag);
         assert_eq!(result.name, "petstore");
         assert_eq!(result.icon, "\u{2601}");
         assert_eq!(result.groups.len(), 2);
@@ -420,7 +414,7 @@ paths:
     fn convert_by_path() {
         let spec = petstore_spec();
         let result =
-            convert(&spec, "petstore", "\u{2601}", &[], GroupingStrategy::ByPath).unwrap();
+            convert(&spec, "petstore", "\u{2601}", &[], GroupingStrategy::ByPath);
         // /pets and /pets/{petId} both group to "pets", /stores to "stores"
         assert_eq!(result.groups.len(), 2);
     }
@@ -434,8 +428,7 @@ paths:
             "\u{2601}",
             &[],
             GroupingStrategy::ByOperationId,
-        )
-        .unwrap();
+        );
         // listPets→Pets, createPet→Pet, getPet→Pet, deletePet→Pet, listStores→Stores
         assert!(result.groups.len() >= 2);
     }
@@ -443,7 +436,7 @@ paths:
     #[test]
     fn convert_auto_uses_tags() {
         let spec = petstore_spec();
-        let result = convert(&spec, "test", "", &[], GroupingStrategy::Auto).unwrap();
+        let result = convert(&spec, "test", "", &[], GroupingStrategy::Auto);
         // Auto should pick ByTag since tags exist
         assert_eq!(result.groups.len(), 2);
     }
@@ -453,14 +446,14 @@ paths:
         let spec = petstore_spec();
         let aliases = vec!["ps".into(), "pet".into()];
         let result =
-            convert(&spec, "petstore", "\u{2601}", &aliases, GroupingStrategy::Auto).unwrap();
+            convert(&spec, "petstore", "\u{2601}", &aliases, GroupingStrategy::Auto);
         assert_eq!(result.aliases, vec!["ps", "pet"]);
     }
 
     #[test]
     fn flags_extracted_from_params() {
         let spec = petstore_spec();
-        let result = convert(&spec, "test", "", &[], GroupingStrategy::ByTag).unwrap();
+        let result = convert(&spec, "test", "", &[], GroupingStrategy::ByTag);
         let pets = result.groups.iter().find(|g| g.name == "pets").unwrap();
         // Should have "limit" from query param and "petId" from path param and "name" from body
         let flag_names: Vec<&str> = pets.flags.iter().map(|f| f.name.as_str()).collect();
@@ -472,7 +465,7 @@ paths:
     #[test]
     fn glyph_auto_assignment() {
         let spec = petstore_spec();
-        let result = convert(&spec, "test", "", &[], GroupingStrategy::ByTag).unwrap();
+        let result = convert(&spec, "test", "", &[], GroupingStrategy::ByTag);
         let stores = result.groups.iter().find(|g| g.name == "stores").unwrap();
         assert_eq!(stores.glyph, Glyph::View); // only GET operations
     }
@@ -517,7 +510,7 @@ paths: {}
 "#,
         )
         .unwrap();
-        let result = convert(&spec, "empty", "", &[], GroupingStrategy::Auto).unwrap();
+        let result = convert(&spec, "empty", "", &[], GroupingStrategy::Auto);
         assert!(result.groups.is_empty());
     }
 
@@ -712,7 +705,7 @@ paths: {}
             aliases: vec!["ps".into()],
             strategy: GroupingStrategy::Auto,
         };
-        let result = converter.convert(&spec).unwrap();
+        let result = converter.convert(&spec);
         assert_eq!(result.name, "petstore");
         assert_eq!(result.aliases, vec!["ps"]);
         assert_eq!(result.groups.len(), 2);
@@ -740,7 +733,7 @@ paths:
         )
         .unwrap();
 
-        let result = convert(&spec, "notags", "", &[], GroupingStrategy::Auto).unwrap();
+        let result = convert(&spec, "notags", "", &[], GroupingStrategy::Auto);
         // No tags, no operation IDs → Auto falls through to ByPath.
         // /users → "users", /orders → "orders"
         assert_eq!(result.groups.len(), 2);
@@ -772,7 +765,7 @@ paths:
         )
         .unwrap();
 
-        let result = convert(&spec, "opid-api", "", &[], GroupingStrategy::Auto).unwrap();
+        let result = convert(&spec, "opid-api", "", &[], GroupingStrategy::Auto);
         let group_names: Vec<&str> = result.groups.iter().map(|g| g.name.as_str()).collect();
         assert!(group_names.contains(&"users"));
         assert!(group_names.contains(&"orders"));
@@ -992,7 +985,7 @@ paths:
         )
         .unwrap();
 
-        let result = convert(&spec, "test", "", &[], GroupingStrategy::ByTag).unwrap();
+        let result = convert(&spec, "test", "", &[], GroupingStrategy::ByTag);
         let items = result.groups.iter().find(|g| g.name == "items").unwrap();
         let limit_flags: Vec<&CompletionFlag> =
             items.flags.iter().filter(|f| f.name == "limit").collect();
@@ -1015,7 +1008,7 @@ paths: {}
         )
         .unwrap();
 
-        let result = convert(&spec, "test", "", &[], GroupingStrategy::Auto).unwrap();
+        let result = convert(&spec, "test", "", &[], GroupingStrategy::Auto);
         assert_eq!(result.description, "My Title");
     }
 
@@ -1032,7 +1025,7 @@ paths: {}
         )
         .unwrap();
 
-        let result = convert(&spec, "test", "", &[], GroupingStrategy::Auto).unwrap();
+        let result = convert(&spec, "test", "", &[], GroupingStrategy::Auto);
         assert_eq!(result.description, "My Description");
     }
 
@@ -1053,7 +1046,7 @@ paths:
         )
         .unwrap();
 
-        let result = convert(&spec, "test", "", &[], GroupingStrategy::ByTag).unwrap();
+        let result = convert(&spec, "test", "", &[], GroupingStrategy::ByTag);
         let monitoring = result
             .groups
             .iter()
@@ -1065,7 +1058,7 @@ paths:
     #[test]
     fn test_multi_op_group_uses_formatted_description() {
         let spec = petstore_spec();
-        let result = convert(&spec, "test", "", &[], GroupingStrategy::ByTag).unwrap();
+        let result = convert(&spec, "test", "", &[], GroupingStrategy::ByTag);
         let pets = result.groups.iter().find(|g| g.name == "pets").unwrap();
         assert_eq!(pets.description, "Pets operations");
     }
@@ -1189,7 +1182,7 @@ paths:
         )
         .unwrap();
 
-        let result = convert(&spec, "bare", "", &[], GroupingStrategy::Auto).unwrap();
+        let result = convert(&spec, "bare", "", &[], GroupingStrategy::Auto);
         assert_eq!(result.groups.len(), 1);
         assert_eq!(result.groups[0].name, "items");
         // Operations should be named from method + path since no operation ID.
@@ -1356,7 +1349,7 @@ paths:
 "#,
         )
         .unwrap();
-        let result = convert(&spec, "test", "", &[], GroupingStrategy::ByTag).unwrap();
+        let result = convert(&spec, "test", "", &[], GroupingStrategy::ByTag);
         let items = result.groups.iter().find(|g| g.name == "items").unwrap();
         let methods: Vec<&str> = items.operations.iter().map(|o| o.method.as_str()).collect();
         assert!(methods.contains(&"GET"));
