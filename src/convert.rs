@@ -11,13 +11,13 @@ use crate::spec::{OpenApiSpec, PathItemExt};
 
 // ── Grouping strategy ─────────────────────────────────────────────────────
 
-/// How to group OpenAPI operations into subcommands.
+/// How to group `OpenAPI` operations into subcommands.
 #[derive(Debug, Clone, Copy, Default)]
 pub enum GroupingStrategy {
     /// Try tag first, then path, then operation ID.
     #[default]
     Auto,
-    /// Group by the first OpenAPI tag on each operation.
+    /// Group by the first `OpenAPI` tag on each operation.
     ByTag,
     /// Group by the first non-parameter path segment.
     ByPath,
@@ -53,7 +53,7 @@ impl fmt::Display for GroupingStrategy {
 
 // ── Converter trait ───────────────────────────────────────────────────
 
-/// Trait for converting an OpenAPI spec into a `CompletionSpec`.
+/// Trait for converting an `OpenAPI` spec into a `CompletionSpec`.
 pub trait Converter: Send + Sync {
     /// Perform the conversion.
     ///
@@ -80,7 +80,7 @@ impl Converter for DefaultConverter {
     }
 }
 
-/// Convert an OpenAPI spec into a `CompletionSpec`.
+/// Convert an `OpenAPI` spec into a `CompletionSpec`.
 ///
 /// # Errors
 /// Returns an error if the spec cannot be converted.
@@ -134,65 +134,9 @@ pub fn convert(
         groups_map.entry(key).or_default().push(op);
     }
 
-    // Convert groups to IR.
     let groups = groups_map
         .into_iter()
-        .map(|(group_name, ops)| {
-            let methods: Vec<&str> = ops.iter().map(|o| o.method.as_str()).collect();
-            let glyph = Glyph::from_methods(&methods);
-
-            // Pick the best description from the operations.
-            let description = ops
-                .first()
-                .map(|o| {
-                    if ops.len() == 1 {
-                        o.summary.clone()
-                    } else {
-                        format_group_description(&group_name)
-                    }
-                })
-                .unwrap_or_default();
-
-            // Collect unique flags from all operations in group.
-            let mut flags_map: BTreeMap<String, CompletionFlag> = BTreeMap::new();
-            for op in &ops {
-                for p in &op.params {
-                    flags_map
-                        .entry(p.name.clone())
-                        .or_insert_with(|| CompletionFlag {
-                            name: p.name.clone(),
-                            description: p.description.clone(),
-                            required: p.required,
-                        });
-                }
-                for f in &op.body_fields {
-                    flags_map
-                        .entry(f.name.clone())
-                        .or_insert_with(|| CompletionFlag {
-                            name: f.name.clone(),
-                            description: f.description.clone(),
-                            required: f.required,
-                        });
-                }
-            }
-
-            let operations = ops
-                .iter()
-                .map(|o| CompletionOp {
-                    name: op_name(&o.operation_id, &o.path, &o.method),
-                    description: o.summary.clone(),
-                    method: o.method.clone(),
-                })
-                .collect();
-
-            CommandGroup {
-                name: group_name,
-                description,
-                glyph,
-                operations,
-                flags: flags_map.into_values().collect(),
-            }
-        })
+        .map(|(name, ops)| build_group(name, &ops))
         .collect();
 
     Ok(CompletionSpec {
@@ -227,6 +171,61 @@ struct RawParam {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
+
+fn build_group(group_name: String, ops: &[RawOp]) -> CommandGroup {
+    let methods: Vec<&str> = ops.iter().map(|o| o.method.as_str()).collect();
+    let glyph = Glyph::from_methods(&methods);
+
+    let description = ops
+        .first()
+        .map(|o| {
+            if ops.len() == 1 {
+                o.summary.clone()
+            } else {
+                format_group_description(&group_name)
+            }
+        })
+        .unwrap_or_default();
+
+    let mut flags_map: BTreeMap<String, CompletionFlag> = BTreeMap::new();
+    for op in ops {
+        for p in &op.params {
+            flags_map
+                .entry(p.name.clone())
+                .or_insert_with(|| CompletionFlag {
+                    name: p.name.clone(),
+                    description: p.description.clone(),
+                    required: p.required,
+                });
+        }
+        for f in &op.body_fields {
+            flags_map
+                .entry(f.name.clone())
+                .or_insert_with(|| CompletionFlag {
+                    name: f.name.clone(),
+                    description: f.description.clone(),
+                    required: f.required,
+                });
+        }
+    }
+
+    let operations = ops
+        .iter()
+        .map(|o| CompletionOp {
+            name: op_name(&o.operation_id, &o.path, &o.method),
+            description: o.summary.clone(),
+            method: o.method.clone(),
+        })
+        .collect();
+
+    CommandGroup {
+        name: group_name,
+        description,
+        glyph,
+        operations,
+        flags: flags_map.into_values().collect(),
+    }
+}
 
 /// Return the first non-empty `&str` from a slice of options, or `""`.
 fn first_non_empty<'a>(values: &[Option<&'a str>]) -> &'a str {
