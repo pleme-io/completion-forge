@@ -13,9 +13,9 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use anyhow::{Context, Result};
 use serde::Serialize;
 
+use crate::error::{ForgeError, ForgeResult};
 use crate::ir::CompletionSpec;
 
 // ── Output types matching skim-tab's serde format ─────────────────────────
@@ -41,21 +41,25 @@ struct SkimTabSubcommand {
 /// Generate a skim-tab YAML file and return its path.
 ///
 /// # Errors
-/// Returns an error if file I/O or serialization fails.
-pub fn generate(spec: &CompletionSpec, output_dir: &Path) -> Result<String> {
+/// Returns [`ForgeError::Yaml`] if serialization fails, or
+/// [`ForgeError::Io`] if the file cannot be written.
+pub fn generate(spec: &CompletionSpec, output_dir: &Path) -> ForgeResult<String> {
     let mut commands = vec![spec.name.clone()];
     commands.extend(spec.aliases.iter().cloned());
 
-    let mut subcommands = BTreeMap::new();
-    for group in &spec.groups {
-        subcommands.insert(
-            group.name.clone(),
-            SkimTabSubcommand {
-                description: group.description.clone(),
-                glyph: group.glyph.as_char().to_owned(),
-            },
-        );
-    }
+    let subcommands = spec
+        .groups
+        .iter()
+        .map(|group| {
+            (
+                group.name.clone(),
+                SkimTabSubcommand {
+                    description: group.description.clone(),
+                    glyph: group.glyph.as_char().to_owned(),
+                },
+            )
+        })
+        .collect();
 
     let output = SkimTabSpec {
         commands,
@@ -63,11 +67,10 @@ pub fn generate(spec: &CompletionSpec, output_dir: &Path) -> Result<String> {
         subcommands,
     };
 
-    let yaml = serde_yaml_ng::to_string(&output).context("failed to serialize YAML")?;
+    let yaml = serde_yaml_ng::to_string(&output)?;
     let filename = format!("{}.yaml", spec.name);
     let path = output_dir.join(&filename);
-    std::fs::write(&path, &yaml)
-        .with_context(|| format!("failed to write {}", path.display()))?;
+    std::fs::write(&path, &yaml).map_err(|e| ForgeError::io(&path, e))?;
 
     Ok(path.display().to_string())
 }

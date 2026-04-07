@@ -9,15 +9,14 @@
 
 use std::path::Path;
 
-use anyhow::{Context, Result};
-
+use crate::error::{ForgeError, ForgeResult};
 use crate::ir::CompletionSpec;
 
 /// Generate a fish completion file and return its path.
 ///
 /// # Errors
-/// Returns an error if file I/O fails.
-pub fn generate(spec: &CompletionSpec, output_dir: &Path) -> Result<String> {
+/// Returns [`ForgeError::Io`] if the file cannot be written.
+pub fn generate(spec: &CompletionSpec, output_dir: &Path) -> ForgeResult<String> {
     let mut lines = Vec::new();
     lines.push(format!(
         "# Auto-generated fish completions for {} by completion-forge",
@@ -63,8 +62,7 @@ pub fn generate(spec: &CompletionSpec, output_dir: &Path) -> Result<String> {
     let content = lines.join("\n") + "\n";
     let filename = format!("{}.fish", spec.name);
     let path = output_dir.join(&filename);
-    std::fs::write(&path, &content)
-        .with_context(|| format!("failed to write {}", path.display()))?;
+    std::fs::write(&path, &content).map_err(|e| ForgeError::io(&path, e))?;
 
     Ok(path.display().to_string())
 }
