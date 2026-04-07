@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
+use std::str::FromStr;
 
 use heck::ToKebabCase;
 
@@ -12,6 +13,7 @@ use crate::spec::{OpenApiSpec, PathItemExt};
 
 /// How to group `OpenAPI` operations into subcommands.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum GroupingStrategy {
     /// Try tag first, then path, then operation ID.
     #[default]
@@ -25,14 +27,24 @@ pub enum GroupingStrategy {
 }
 
 impl GroupingStrategy {
-    /// Parse from string (for CLI).
+    /// Parse from string leniently, falling back to [`Auto`](Self::Auto) on
+    /// unrecognised input. Prefer [`FromStr`] when you want an error instead.
     #[must_use]
     pub fn from_str_loose(s: &str) -> Self {
+        s.parse().unwrap_or_default()
+    }
+}
+
+impl FromStr for GroupingStrategy {
+    type Err = crate::error::ParseEnumError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "tag" | "tags" | "by-tag" => Self::ByTag,
-            "path" | "paths" | "by-path" => Self::ByPath,
-            "operation" | "operation-id" | "by-operation-id" => Self::ByOperationId,
-            _ => Self::Auto,
+            "auto" => Ok(Self::Auto),
+            "tag" | "tags" | "by-tag" => Ok(Self::ByTag),
+            "path" | "paths" | "by-path" => Ok(Self::ByPath),
+            "operation" | "operation-id" | "by-operation-id" => Ok(Self::ByOperationId),
+            _ => Err(crate::error::ParseEnumError(s.to_owned())),
         }
     }
 }
@@ -52,13 +64,16 @@ impl fmt::Display for GroupingStrategy {
 
 // ── Converter trait ───────────────────────────────────────────────────
 
-/// Trait for converting an `OpenAPI` spec into a `CompletionSpec`.
+/// Trait for converting an `OpenAPI` spec into a [`CompletionSpec`].
 pub trait Converter: Send + Sync {
     /// Perform the conversion.
     fn convert(&self, spec: &OpenApiSpec) -> CompletionSpec;
 }
 
-/// Default converter that delegates to the free `convert()` function.
+/// Default converter that delegates to the free [`convert()`] function.
+///
+/// Use the builder methods to configure, then call
+/// [`Converter::convert`] to produce a [`CompletionSpec`].
 pub struct DefaultConverter {
     /// CLI command name.
     pub name: String,
@@ -70,13 +85,47 @@ pub struct DefaultConverter {
     pub strategy: GroupingStrategy,
 }
 
+impl DefaultConverter {
+    /// Create a new converter with the given command name.
+    #[must_use]
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            icon: String::new(),
+            aliases: Vec::new(),
+            strategy: GroupingStrategy::default(),
+        }
+    }
+
+    /// Set the prompt icon.
+    #[must_use]
+    pub fn icon(mut self, icon: impl Into<String>) -> Self {
+        self.icon = icon.into();
+        self
+    }
+
+    /// Set the command aliases.
+    #[must_use]
+    pub fn aliases(mut self, aliases: Vec<String>) -> Self {
+        self.aliases = aliases;
+        self
+    }
+
+    /// Set the grouping strategy.
+    #[must_use]
+    pub fn strategy(mut self, strategy: GroupingStrategy) -> Self {
+        self.strategy = strategy;
+        self
+    }
+}
+
 impl Converter for DefaultConverter {
     fn convert(&self, spec: &OpenApiSpec) -> CompletionSpec {
         convert(spec, &self.name, &self.icon, &self.aliases, self.strategy)
     }
 }
 
-/// Convert an `OpenAPI` spec into a `CompletionSpec`.
+/// Convert an `OpenAPI` spec into a [`CompletionSpec`].
 #[must_use]
 pub fn convert(
     spec: &OpenApiSpec,
@@ -85,27 +134,16 @@ pub fn convert(
     aliases: &[String],
     strategy: GroupingStrategy,
 ) -> CompletionSpec {
-    // Collect all operations with their metadata.
-    let mut raw_ops: Vec<RawOp> = Vec::new();
-    for (path, item) in &spec.paths {
-        let path_params = &item.parameters;
-        for (method, op) in item.operations() {
-            let summary = first_non_empty(&[
-                op.summary.as_deref(),
-                op.description.as_deref(),
-            ])
-            .to_owned();
-            raw_ops.push(RawOp {
-                method: method.to_owned(),
-                path: path.clone(),
-                operation_id: op.operation_id.clone().unwrap_or_default(),
-                summary,
-                tags: op.tags.clone(),
-                params: collect_params(path_params, &op.parameters),
-                body_fields: collect_body_fields(op),
-            });
-        }
-    }
+    let raw_ops: Vec<RawOp> = spec
+        .paths
+        .iter()
+        .flat_map(|(path, item)| {
+            let path_params = &item.parameters;
+            item.operations()
+                .into_iter()
+                .map(move |(method, op)| RawOp::from_operation(path, method, op, path_params))
+        })
+        .collect();
 
     // Determine effective strategy.
     let effective = match strategy {
@@ -121,10 +159,9 @@ pub fn convert(
         other => other,
     };
 
-    // Group operations.
     let mut groups_map: BTreeMap<String, Vec<RawOp>> = BTreeMap::new();
     for op in raw_ops {
-        let key = group_key(&op, effective);
+        let key = op.group_key(effective);
         groups_map.entry(key).or_default().push(op);
     }
 
@@ -164,6 +201,61 @@ struct RawParam {
     required: bool,
 }
 
+impl From<&RawParam> for CompletionFlag {
+    fn from(p: &RawParam) -> Self {
+        Self {
+            name: p.name.clone(),
+            description: p.description.clone(),
+            required: p.required,
+        }
+    }
+}
+
+impl RawOp {
+    fn group_key(&self, strategy: GroupingStrategy) -> String {
+        match strategy {
+            GroupingStrategy::ByTag | GroupingStrategy::Auto => self
+                .tags
+                .first()
+                .map_or_else(|| path_group(&self.path), |t| t.to_kebab_case()),
+            GroupingStrategy::ByPath => path_group(&self.path),
+            GroupingStrategy::ByOperationId => operation_id_group(&self.operation_id),
+        }
+    }
+
+    fn completion_name(&self) -> String {
+        if !self.operation_id.is_empty() {
+            return self.operation_id.to_kebab_case();
+        }
+        let path_part: String = self
+            .path
+            .split('/')
+            .filter(|s| !s.is_empty() && !s.starts_with('{'))
+            .collect::<Vec<_>>()
+            .join("-");
+        format!("{}-{path_part}", self.method.to_lowercase()).to_kebab_case()
+    }
+
+    fn from_operation(
+        path: &str,
+        method: &str,
+        op: &crate::spec::Operation,
+        path_params: &[crate::spec::Parameter],
+    ) -> Self {
+        let summary = first_non_empty(&[op.summary.as_deref(), op.description.as_deref()])
+            .to_owned();
+        Self {
+            method: method.to_owned(),
+            path: path.to_owned(),
+            operation_id: op.operation_id.clone().unwrap_or_default(),
+            summary,
+            tags: op.tags.clone(),
+            params: collect_params(path_params, &op.parameters),
+            body_fields: collect_body_fields(op),
+        }
+    }
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 fn build_group(group_name: String, ops: &[RawOp]) -> CommandGroup {
@@ -183,30 +275,17 @@ fn build_group(group_name: String, ops: &[RawOp]) -> CommandGroup {
 
     let mut flags_map: BTreeMap<String, CompletionFlag> = BTreeMap::new();
     for op in ops {
-        for p in &op.params {
+        for p in op.params.iter().chain(&op.body_fields) {
             flags_map
                 .entry(p.name.clone())
-                .or_insert_with(|| CompletionFlag {
-                    name: p.name.clone(),
-                    description: p.description.clone(),
-                    required: p.required,
-                });
-        }
-        for f in &op.body_fields {
-            flags_map
-                .entry(f.name.clone())
-                .or_insert_with(|| CompletionFlag {
-                    name: f.name.clone(),
-                    description: f.description.clone(),
-                    required: f.required,
-                });
+                .or_insert_with(|| CompletionFlag::from(p));
         }
     }
 
     let operations = ops
         .iter()
         .map(|o| CompletionOp {
-            name: op_name(&o.operation_id, &o.path, &o.method),
+            name: o.completion_name(),
             description: o.summary.clone(),
             method: o.method.clone(),
         })
@@ -234,15 +313,15 @@ fn collect_params(
     path_params: &[crate::spec::Parameter],
     op_params: &[crate::spec::Parameter],
 ) -> Vec<RawParam> {
-    let mut result = Vec::new();
-    for p in path_params.iter().chain(op_params) {
-        result.push(RawParam {
+    path_params
+        .iter()
+        .chain(op_params)
+        .map(|p| RawParam {
             name: p.name.clone(),
             description: p.description.clone().unwrap_or_default(),
             required: p.required,
-        });
-    }
-    result
+        })
+        .collect()
 }
 
 fn collect_body_fields(op: &crate::spec::Operation) -> Vec<RawParam> {
@@ -267,17 +346,6 @@ fn collect_body_fields(op: &crate::spec::Operation) -> Vec<RawParam> {
         .collect()
 }
 
-fn group_key(op: &RawOp, strategy: GroupingStrategy) -> String {
-    match strategy {
-        GroupingStrategy::ByTag | GroupingStrategy::Auto => op
-            .tags
-            .first()
-            .map_or_else(|| path_group(&op.path), |t| t.to_kebab_case()),
-        GroupingStrategy::ByPath => path_group(&op.path),
-        GroupingStrategy::ByOperationId => operation_id_group(&op.operation_id),
-    }
-}
-
 /// Extract group name from path: `/pets/{petId}` → `"pets"`.
 fn path_group(path: &str) -> String {
     path.split('/')
@@ -297,11 +365,11 @@ fn operation_id_group(op_id: &str) -> String {
 }
 
 fn strip_verb_prefix(s: &str) -> &str {
-    let prefixes = [
+    const PREFIXES: &[&str] = &[
         "list", "get", "create", "update", "delete", "remove", "add", "set", "put", "patch",
         "post", "find", "search", "fetch",
     ];
-    for prefix in &prefixes {
+    for prefix in PREFIXES {
         if let Some(rest) = s
             .strip_prefix(prefix)
             .filter(|r| r.starts_with(|c: char| c.is_uppercase()))
@@ -312,31 +380,31 @@ fn strip_verb_prefix(s: &str) -> &str {
     s
 }
 
-fn op_name(operation_id: &str, path: &str, method: &str) -> String {
-    if !operation_id.is_empty() {
-        return operation_id.to_kebab_case();
-    }
-    // Fallback: method + path segments.
-    let path_part: String = path
-        .split('/')
-        .filter(|s| !s.is_empty() && !s.starts_with('{'))
-        .collect::<Vec<_>>()
-        .join("-");
-    format!("{}-{path_part}", method.to_lowercase()).to_kebab_case()
-}
-
 fn format_group_description(group_name: &str) -> String {
-    let mut chars = group_name.replace('-', " ").chars().collect::<Vec<_>>();
-    if let Some(c) = chars.first_mut() {
-        *c = c.to_uppercase().next().unwrap_or(*c);
-    }
-    let desc: String = chars.into_iter().collect();
-    format!("{desc} operations")
+    let spaced = group_name.replace('-', " ");
+    let mut chars = spaced.chars();
+    let capitalised: String = match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => String::new(),
+    };
+    format!("{capitalised} operations")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn raw_op(method: &str, path: &str, operation_id: &str) -> RawOp {
+        RawOp {
+            method: method.into(),
+            path: path.into(),
+            operation_id: operation_id.into(),
+            summary: String::new(),
+            tags: vec![],
+            params: vec![],
+            body_fields: vec![],
+        }
+    }
 
     fn petstore_spec() -> OpenApiSpec {
         serde_yaml_ng::from_str(
@@ -490,13 +558,22 @@ paths:
 
     #[test]
     fn op_name_from_operation_id() {
-        assert_eq!(op_name("listPets", "/pets", "GET"), "list-pets");
-        assert_eq!(op_name("createPet", "/pets", "POST"), "create-pet");
+        assert_eq!(
+            raw_op("GET", "/pets", "listPets").completion_name(),
+            "list-pets"
+        );
+        assert_eq!(
+            raw_op("POST", "/pets", "createPet").completion_name(),
+            "create-pet"
+        );
     }
 
     #[test]
     fn op_name_fallback() {
-        assert_eq!(op_name("", "/pets/{petId}", "GET"), "get-pets");
+        assert_eq!(
+            raw_op("GET", "/pets/{petId}", "").completion_name(),
+            "get-pets"
+        );
     }
 
     #[test]
@@ -668,7 +745,7 @@ paths: {}
             params: vec![],
             body_fields: vec![],
         };
-        let key = group_key(&op, GroupingStrategy::ByTag);
+        let key = op.group_key(GroupingStrategy::ByTag);
         assert_eq!(key, "animals");
     }
 
@@ -683,7 +760,7 @@ paths: {}
             params: vec![],
             body_fields: vec![],
         };
-        let key = group_key(&op, GroupingStrategy::ByPath);
+        let key = op.group_key(GroupingStrategy::ByPath);
         assert_eq!(key, "pets");
     }
 
@@ -809,7 +886,7 @@ paths:
             params: vec![],
             body_fields: vec![],
         };
-        let key = group_key(&op, GroupingStrategy::ByOperationId);
+        let key = op.group_key(GroupingStrategy::ByOperationId);
         assert_eq!(key, "pets");
     }
 
@@ -824,7 +901,7 @@ paths:
             params: vec![],
             body_fields: vec![],
         };
-        let key = group_key(&op, GroupingStrategy::ByOperationId);
+        let key = op.group_key(GroupingStrategy::ByOperationId);
         assert_eq!(key, "default");
     }
 
@@ -839,7 +916,7 @@ paths:
             params: vec![],
             body_fields: vec![],
         };
-        let key = group_key(&op, GroupingStrategy::ByTag);
+        let key = op.group_key(GroupingStrategy::ByTag);
         assert_eq!(key, "users");
     }
 
@@ -1093,12 +1170,15 @@ paths:
 
     #[test]
     fn test_op_name_multi_segment_path() {
-        assert_eq!(op_name("", "/api/v1/users", "GET"), "get-api-v1-users");
+        assert_eq!(
+            raw_op("GET", "/api/v1/users", "").completion_name(),
+            "get-api-v1-users"
+        );
     }
 
     #[test]
     fn test_op_name_path_with_only_params() {
-        assert_eq!(op_name("", "/{id}", "DELETE"), "delete");
+        assert_eq!(raw_op("DELETE", "/{id}", "").completion_name(), "delete");
     }
 
     #[test]
@@ -1355,5 +1435,120 @@ paths:
         assert!(methods.contains(&"GET"));
         assert!(methods.contains(&"POST"));
         assert!(methods.contains(&"PUT"));
+    }
+
+    #[test]
+    fn test_default_converter_builder() {
+        let spec = petstore_spec();
+        let converter = DefaultConverter::new("petstore")
+            .icon("\u{2601}")
+            .aliases(vec!["ps".into()])
+            .strategy(GroupingStrategy::ByTag);
+        let result = converter.convert(&spec);
+        assert_eq!(result.name, "petstore");
+        assert_eq!(result.icon, "\u{2601}");
+        assert_eq!(result.aliases, vec!["ps"]);
+        assert_eq!(result.groups.len(), 2);
+    }
+
+    #[test]
+    fn test_default_converter_builder_defaults() {
+        let spec = petstore_spec();
+        let converter = DefaultConverter::new("petstore");
+        assert!(converter.icon.is_empty());
+        assert!(converter.aliases.is_empty());
+        assert_eq!(converter.strategy, GroupingStrategy::Auto);
+        let result = converter.convert(&spec);
+        assert_eq!(result.name, "petstore");
+    }
+
+    struct MockConverter {
+        spec: CompletionSpec,
+    }
+
+    impl Converter for MockConverter {
+        fn convert(&self, _spec: &OpenApiSpec) -> CompletionSpec {
+            self.spec.clone()
+        }
+    }
+
+    #[test]
+    fn mock_converter_returns_canned_spec() {
+        let spec = petstore_spec();
+        let canned = CompletionSpec {
+            name: "mock-tool".into(),
+            icon: "M".into(),
+            ..CompletionSpec::default()
+        };
+        let mock = MockConverter {
+            spec: canned.clone(),
+        };
+        let result = mock.convert(&spec);
+        assert_eq!(result.name, "mock-tool");
+        assert_eq!(result.icon, "M");
+        assert!(result.groups.is_empty());
+    }
+
+    #[test]
+    fn converter_trait_object_dispatches() {
+        let spec = petstore_spec();
+        let converters: Vec<Box<dyn Converter>> = vec![
+            Box::new(DefaultConverter::new("petstore").strategy(GroupingStrategy::ByTag)),
+            Box::new(MockConverter {
+                spec: CompletionSpec {
+                    name: "mock".into(),
+                    ..CompletionSpec::default()
+                },
+            }),
+        ];
+
+        let results: Vec<String> = converters
+            .iter()
+            .map(|c| c.convert(&spec).name)
+            .collect();
+
+        assert_eq!(results, vec!["petstore", "mock"]);
+    }
+
+    #[test]
+    fn grouping_strategy_from_str_valid() {
+        assert_eq!(
+            "auto".parse::<GroupingStrategy>().unwrap(),
+            GroupingStrategy::Auto
+        );
+        assert_eq!(
+            "tag".parse::<GroupingStrategy>().unwrap(),
+            GroupingStrategy::ByTag
+        );
+        assert_eq!(
+            "path".parse::<GroupingStrategy>().unwrap(),
+            GroupingStrategy::ByPath
+        );
+        assert_eq!(
+            "operation-id".parse::<GroupingStrategy>().unwrap(),
+            GroupingStrategy::ByOperationId
+        );
+    }
+
+    #[test]
+    fn grouping_strategy_from_str_invalid() {
+        assert!("nope".parse::<GroupingStrategy>().is_err());
+    }
+
+    #[test]
+    fn grouping_strategy_display_from_str_roundtrip() {
+        let variants = [
+            GroupingStrategy::Auto,
+            GroupingStrategy::ByTag,
+            GroupingStrategy::ByPath,
+            GroupingStrategy::ByOperationId,
+        ];
+        for v in &variants {
+            let s = v.to_string();
+            let parsed: GroupingStrategy = s.parse().unwrap_or_else(|_| {
+                panic!("failed to parse GroupingStrategy from Display output: {s}")
+            });
+            assert_eq!(*v, parsed, "round-trip failed for {s}");
+        }
     }
 }
