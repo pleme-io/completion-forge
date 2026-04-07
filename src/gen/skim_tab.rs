@@ -163,6 +163,112 @@ mod tests {
     }
 
     #[test]
+    fn generate_no_aliases() {
+        let dir = tempfile::tempdir().unwrap();
+        let spec = CompletionSpec {
+            name: "solo".into(),
+            icon: "★".into(),
+            aliases: vec![],
+            description: "Solo tool".into(),
+            groups: vec![CommandGroup {
+                name: "items".into(),
+                description: "Item operations".into(),
+                glyph: Glyph::Create,
+                operations: vec![],
+                flags: vec![],
+            }],
+        };
+
+        let path = generate(&spec, dir.path()).unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
+        let parsed: SkimTabSpec = serde_yaml_ng::from_str(&content).unwrap();
+        assert_eq!(parsed.commands, vec!["solo"]);
+        assert_eq!(parsed.icon, "★");
+    }
+
+    #[test]
+    fn generate_all_glyph_types() {
+        use crate::ir::Glyph;
+
+        let dir = tempfile::tempdir().unwrap();
+        let glyphs = vec![
+            ("view-group", Glyph::View, "\u{25C8}"),
+            ("create-group", Glyph::Create, "\u{25C7}"),
+            ("update-group", Glyph::Update, "\u{21BB}"),
+            ("delete-group", Glyph::Delete, "\u{25C7}"),
+            ("manage-group", Glyph::Manage, "\u{2299}"),
+            ("execute-group", Glyph::Execute, "\u{25B8}"),
+            ("custom-group", Glyph::Custom("✦".into()), "✦"),
+        ];
+
+        let groups: Vec<CommandGroup> = glyphs
+            .iter()
+            .map(|(name, glyph, _)| CommandGroup {
+                name: (*name).into(),
+                description: format!("{name} desc"),
+                glyph: glyph.clone(),
+                operations: vec![],
+                flags: vec![],
+            })
+            .collect();
+
+        let spec = CompletionSpec {
+            name: "glyph-test".into(),
+            icon: "☁".into(),
+            aliases: vec![],
+            description: "Glyph test".into(),
+            groups,
+        };
+
+        let path = generate(&spec, dir.path()).unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
+        let parsed: SkimTabSpec = serde_yaml_ng::from_str(&content).unwrap();
+
+        for (name, _, expected_char) in &glyphs {
+            let sub = &parsed.subcommands[*name];
+            assert_eq!(
+                sub.glyph, *expected_char,
+                "glyph mismatch for {name}"
+            );
+        }
+    }
+
+    #[test]
+    fn generate_multiple_aliases() {
+        let dir = tempfile::tempdir().unwrap();
+        let spec = CompletionSpec {
+            name: "main-tool".into(),
+            icon: "⚡".into(),
+            aliases: vec!["mt".into(), "tool".into(), "m".into()],
+            description: "Multi alias tool".into(),
+            groups: vec![],
+        };
+
+        let path = generate(&spec, dir.path()).unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
+        let parsed: SkimTabSpec = serde_yaml_ng::from_str(&content).unwrap();
+        assert_eq!(parsed.commands, vec!["main-tool", "mt", "tool", "m"]);
+    }
+
+    #[test]
+    fn generate_empty_groups() {
+        let dir = tempfile::tempdir().unwrap();
+        let spec = CompletionSpec {
+            name: "bare".into(),
+            icon: String::new(),
+            aliases: vec![],
+            description: "Bare tool".into(),
+            groups: vec![],
+        };
+
+        let path = generate(&spec, dir.path()).unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("commands:"));
+        assert!(!content.contains("icon:"), "empty icon should be omitted");
+        assert!(content.contains("subcommands: {}"));
+    }
+
+    #[test]
     fn test_generate_with_many_groups() {
         use crate::ir::CompletionFlag;
 
