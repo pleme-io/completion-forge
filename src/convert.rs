@@ -11,7 +11,7 @@ use crate::spec::{OpenApiSpec, PathItemExt};
 // ── Grouping strategy ─────────────────────────────────────────────────────
 
 /// How to group `OpenAPI` operations into subcommands.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum GroupingStrategy {
     /// Try tag first, then path, then operation ID.
     #[default]
