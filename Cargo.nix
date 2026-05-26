@@ -381,7 +381,7 @@ rec {
       };
       "completion-forge" = rec {
         crateName = "completion-forge";
-        version = "0.1.0";
+        version = "0.1.1";
         edition = "2024";
         crateBin = [
           {
@@ -391,6 +391,7 @@ rec {
           }
         ];
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./.; };
+        libName = "completion_forge";
         dependencies = [
           {
             name = "anyhow";
@@ -406,6 +407,10 @@ rec {
             packageId = "heck";
           }
           {
+            name = "sekkei";
+            packageId = "sekkei";
+          }
+          {
             name = "serde";
             packageId = "serde";
             features = [ "derive" ];
@@ -417,6 +422,10 @@ rec {
           {
             name = "serde_yaml_ng";
             packageId = "serde_yaml_ng";
+          }
+          {
+            name = "thiserror";
+            packageId = "thiserror";
           }
         ];
         devDependencies = [
@@ -1056,6 +1065,37 @@ rec {
           "no-panic" = [ "dep:no-panic" ];
         };
       };
+      "sekkei" = rec {
+        crateName = "sekkei";
+        version = "0.1.0";
+        edition = "2024";
+        workspace_member = null;
+        src = pkgs.fetchgit {
+          url = "https://github.com/pleme-io/sekkei";
+          rev = "7902f1c5b2f9c82469e87fd6e87aeae82e16e2f6";
+          sha256 = "0n1v00rds8gdmhizxhalycab3n0fihdk4g14f42qyf7d9vcc62ri";
+        };
+        dependencies = [
+          {
+            name = "anyhow";
+            packageId = "anyhow";
+          }
+          {
+            name = "serde";
+            packageId = "serde";
+            features = [ "derive" ];
+          }
+          {
+            name = "serde_json";
+            packageId = "serde_json";
+          }
+          {
+            name = "serde_yaml_ng";
+            packageId = "serde_yaml_ng";
+          }
+        ];
+
+      };
       "semver" = rec {
         crateName = "semver";
         version = "1.0.27";
@@ -1337,6 +1377,51 @@ rec {
           "getrandom" = [ "dep:getrandom" ];
         };
         resolvedDefaultFeatures = [ "default" "getrandom" ];
+      };
+      "thiserror" = rec {
+        crateName = "thiserror";
+        version = "2.0.18";
+        edition = "2021";
+        sha256 = "1i7vcmw9900bvsmay7mww04ahahab7wmr8s925xc083rpjybb222";
+        authors = [
+          "David Tolnay <dtolnay@gmail.com>"
+        ];
+        dependencies = [
+          {
+            name = "thiserror-impl";
+            packageId = "thiserror-impl";
+          }
+        ];
+        features = {
+          "default" = [ "std" ];
+        };
+        resolvedDefaultFeatures = [ "default" "std" ];
+      };
+      "thiserror-impl" = rec {
+        crateName = "thiserror-impl";
+        version = "2.0.18";
+        edition = "2021";
+        sha256 = "1mf1vrbbimj1g6dvhdgzjmn6q09yflz2b92zs1j9n3k7cxzyxi7b";
+        procMacro = true;
+        libName = "thiserror_impl";
+        authors = [
+          "David Tolnay <dtolnay@gmail.com>"
+        ];
+        dependencies = [
+          {
+            name = "proc-macro2";
+            packageId = "proc-macro2";
+          }
+          {
+            name = "quote";
+            packageId = "quote";
+          }
+          {
+            name = "syn";
+            packageId = "syn";
+          }
+        ];
+
       };
       "unicode-ident" = rec {
         crateName = "unicode-ident";
