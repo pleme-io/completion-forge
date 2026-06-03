@@ -320,8 +320,8 @@ checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
 name = "sekkei"
-version = "0.1.0"
-source = "git+https://github.com/pleme-io/sekkei#52f2ab0650e26fd931ea15fc48bb246dda1d200e"
+version = "0.1.1"
+source = "git+https://github.com/pleme-io/sekkei#f9d27e9971bd0be7729a492797efa65711cb6171"
 dependencies = [
  "serde",
  "serde_json",

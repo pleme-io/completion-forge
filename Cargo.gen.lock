@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "cargo_lock_sha256": "6519916bceb9d8a98bb079dc012227a009501eede54021817f118028fb139049",
+  "cargo_lock_sha256": "3272982c2393eca5d414cf1bc0cfd9d62f70e5e657ef822d2da32bb3907fd5bd",
   "target_resolves": {
     "base": {
       "anstream-1.0.0": {
@@ -309,7 +309,7 @@
           },
           {
             "name": "sekkei",
-            "package_key": "sekkei-0.1.0",
+            "package_key": "sekkei-0.1.1",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -640,7 +640,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "sekkei-0.1.0": {
+      "sekkei-0.1.1": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -1754,7 +1754,7 @@
     "ryu-1.0.23": {
       "edition": "2021"
     },
-    "sekkei-0.1.0": {
+    "sekkei-0.1.1": {
       "edition": "2024"
     },
     "serde-1.0.228": {
@@ -1821,7 +1821,7 @@
     }
   },
   "git_nar_sha256": {
-    "sekkei-0.1.0": "sha256-CqwFKqH82EiaZ0L7EcmuME3F64abf4uq5e62acku/jI="
+    "sekkei-0.1.1": "sha256-qOa3MHGqWVhvbjmjHg0RJo0pfNSOXqEArNAQ0xfQNXw="
   },
   "flake_metadata": {}
 }
