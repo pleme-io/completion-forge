@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "cargo_lock_sha256": "3272982c2393eca5d414cf1bc0cfd9d62f70e5e657ef822d2da32bb3907fd5bd",
+  "cargo_lock_sha256": "e0bd5fbd3ae5b705e3e37945cf89b223379f64a708d830a3bd8f496c679cb43e",
   "target_resolves": {
     "base": {
       "anstream-1.0.0": {
@@ -113,7 +113,7 @@
           "std"
         ]
       },
-      "bitflags-2.11.1": {
+      "bitflags-2.12.1": {
         "runtime_dependencies": [],
         "build_dependencies": [],
         "features": [
@@ -273,7 +273,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "completion-forge-0.1.1": {
+      "completion-forge-0.1.2": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -580,7 +580,7 @@
           "std"
         ]
       },
-      "memchr-2.8.0": {
+      "memchr-2.8.1": {
         "runtime_dependencies": [],
         "build_dependencies": [],
         "features": [
@@ -791,7 +791,7 @@
           },
           {
             "name": "memchr",
-            "package_key": "memchr-2.8.0",
+            "package_key": "memchr-2.8.1",
             "kind": "normal",
             "features": [],
             "uses_default_features": false,
@@ -1069,7 +1069,7 @@
             "runtime_dependencies": [
               {
                 "name": "bitflags",
-                "package_key": "bitflags-2.11.1",
+                "package_key": "bitflags-2.12.1",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -1144,7 +1144,7 @@
             "runtime_dependencies": [
               {
                 "name": "bitflags",
-                "package_key": "bitflags-2.11.1",
+                "package_key": "bitflags-2.12.1",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -1231,7 +1231,7 @@
             "runtime_dependencies": [
               {
                 "name": "bitflags",
-                "package_key": "bitflags-2.11.1",
+                "package_key": "bitflags-2.12.1",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -1338,7 +1338,7 @@
             "runtime_dependencies": [
               {
                 "name": "bitflags",
-                "package_key": "bitflags-2.11.1",
+                "package_key": "bitflags-2.12.1",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -1445,7 +1445,7 @@
             "runtime_dependencies": [
               {
                 "name": "bitflags",
-                "package_key": "bitflags-2.11.1",
+                "package_key": "bitflags-2.12.1",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -1552,7 +1552,7 @@
             "runtime_dependencies": [
               {
                 "name": "bitflags",
-                "package_key": "bitflags-2.11.1",
+                "package_key": "bitflags-2.12.1",
                 "kind": "normal",
                 "features": [],
                 "uses_default_features": false,
@@ -1660,7 +1660,7 @@
       "edition": "2021",
       "build_script": "build.rs"
     },
-    "bitflags-2.11.1": {
+    "bitflags-2.12.1": {
       "edition": "2021"
     },
     "cfg-if-1.0.4": {
@@ -1688,7 +1688,7 @@
     "colorchoice-1.0.5": {
       "edition": "2021"
     },
-    "completion-forge-0.1.1": {
+    "completion-forge-0.1.2": {
       "edition": "2024",
       "lib_target": {
         "name": "completion_forge",
@@ -1733,7 +1733,7 @@
       "edition": "2021",
       "build_script": "build.rs"
     },
-    "memchr-2.8.0": {
+    "memchr-2.8.1": {
       "edition": "2021"
     },
     "once_cell-1.21.4": {
@@ -1821,7 +1821,7 @@
     }
   },
   "git_nar_sha256": {
-    "sekkei-0.1.1": "sha256-qOa3MHGqWVhvbjmjHg0RJo0pfNSOXqEArNAQ0xfQNXw="
+    "sekkei-0.1.1": "sha256-1UP8A/qvvIZKHUjE63Eyp4/qMWBiDqC4a9WdRxdqoH4="
   },
   "flake_metadata": {}
 }
