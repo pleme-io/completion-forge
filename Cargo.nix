@@ -224,9 +224,9 @@ rec {
       };
       "bitflags" = rec {
         crateName = "bitflags";
-        version = "2.11.1";
+        version = "2.12.1";
         edition = "2021";
-        sha256 = "1cvqijg3rvwgis20a66vfdxannjsxfy5fgjqkaq3l13gyfcj4lf4";
+        sha256 = "02phhjm7w380zdh8928zf13cfi1bw2qz2ay36ml2jmwmmv8cxmw4";
         authors = [
           "The Rust Project Developers"
         ];
@@ -381,7 +381,7 @@ rec {
       };
       "completion-forge" = rec {
         crateName = "completion-forge";
-        version = "0.1.2";
+        version = "0.1.3";
         edition = "2024";
         crateBin = [
           {
@@ -783,9 +783,9 @@ rec {
       };
       "log" = rec {
         crateName = "log";
-        version = "0.4.30";
+        version = "0.4.31";
         edition = "2021";
-        sha256 = "1rd6sw3gv9hb93464w7x3sip99zf8sjagm662r2ckg14b1lcavk1";
+        sha256 = "0kq2fh6q2bjkrm8m6hj8kb7gxfd7cr7qbcpxd1lc1xq5rns30fqi";
         authors = [
           "The Rust Project Developers"
         ];
@@ -806,9 +806,9 @@ rec {
       };
       "memchr" = rec {
         crateName = "memchr";
-        version = "2.8.0";
+        version = "2.8.1";
         edition = "2021";
-        sha256 = "0y9zzxcqxvdqg6wyag7vc3h0blhdn7hkq164bxyx2vph8zs5ijpq";
+        sha256 = "1n448jx01h5z2xknj6x2dhxgr8s8fb717cf6vfqj5lmhkpj7m53b";
         authors = [
           "Andrew Gallant <jamslam@gmail.com>"
           "bluss"
@@ -1069,8 +1069,8 @@ rec {
         workspace_member = null;
         src = pkgs.fetchgit {
           url = "https://github.com/pleme-io/sekkei";
-          rev = "f9d27e9971bd0be7729a492797efa65711cb6171";
-          sha256 = "0z1ms0bx646hmh0a2plfsiy2k396246ix8rrdrpmhndaf4qbgrm8";
+          rev = "8593191d5bae57d5dddd8d6be618ed63238fda95";
+          sha256 = "0zm0d8blg7fmdfwa03k2c0qym3x769qypi283m58dg5gz81zqhym";
         };
         dependencies = [
           {
