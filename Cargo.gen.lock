@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "cargo_lock_sha256": "e0bd5fbd3ae5b705e3e37945cf89b223379f64a708d830a3bd8f496c679cb43e",
+  "cargo_lock_sha256": "736689471a517ab631a025a1a95833f0a01a8eb3a499858411d7f101b7906b12",
   "target_resolves": {
     "base": {
       "anstream-1.0.0": {
@@ -273,7 +273,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "completion-forge-0.1.2": {
+      "completion-forge-0.1.3": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -1688,7 +1688,7 @@
     "colorchoice-1.0.5": {
       "edition": "2021"
     },
-    "completion-forge-0.1.2": {
+    "completion-forge-0.1.3": {
       "edition": "2024",
       "lib_target": {
         "name": "completion_forge",
@@ -1821,7 +1821,7 @@
     }
   },
   "git_nar_sha256": {
-    "sekkei-0.1.1": "sha256-1UP8A/qvvIZKHUjE63Eyp4/qMWBiDqC4a9WdRxdqoH4="
+    "sekkei-0.1.1": "sha256-GmnVLwM+WsUVbdgpCVHKITtC02v9pbMegyQQYi2GQPM="
   },
   "flake_metadata": {}
 }
