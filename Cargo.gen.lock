@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
-  "cargo_lock_sha256": "b8f2ae508b0871373822621af853c5584f7008deb84badb3c61c3d7f630caf42",
+  "cargo_lock_sha256": "4045affd44fc15b9f8bb0dccfd78775ca2159e63d260c1565cc7dc5d4d43011b",
   "manifest_sha256": {
-    "Cargo.toml": "6dfe818a7f736c79272d2ba15894c9447af3020165a3aa10a446a27913b93b49"
+    "Cargo.toml": "8a98aad7337cd3247ee60b0031052d8650f788839245f4b24dbbe8045370955f"
   },
   "target_resolves": {
     "base": {
@@ -276,7 +276,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "completion-forge-0.1.3": {
+      "completion-forge-0.1.4": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -1724,7 +1724,7 @@
     "colorchoice-1.0.5": {
       "edition": "2021"
     },
-    "completion-forge-0.1.3": {
+    "completion-forge-0.1.4": {
       "edition": "2024",
       "lib_target": {
         "name": "completion_forge",
