@@ -245,7 +245,10 @@ impl RawOp {
         let summary = first_non_empty(&[op.summary.as_deref(), op.description.as_deref()])
             .to_owned();
         Self {
-            method: method.to_owned(),
+            // sekkei yields lowercase HTTP methods; completion-forge's IR is
+            // uppercase-canonical (Glyph::from_methods, the CLI listing, and
+            // every RawOp fixture). Normalize once, at the only ingest seam.
+            method: method.to_ascii_uppercase(),
             path: path.to_owned(),
             operation_id: op.operation_id.clone().unwrap_or_default(),
             summary,

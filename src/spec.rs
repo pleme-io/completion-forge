@@ -102,10 +102,10 @@ paths:
     fn path_item_operations() {
         let spec: OpenApiSpec = serde_yaml_ng::from_str(PETSTORE_SPEC).unwrap();
         let pets = &spec.paths["/pets"];
-        let ops = pets.operations();
+        let ops: Vec<_> = pets.operations().collect();
         assert_eq!(ops.len(), 2);
-        assert_eq!(ops[0].0, "GET");
-        assert_eq!(ops[1].0, "POST");
+        assert_eq!(ops[0].0, "get");
+        assert_eq!(ops[1].0, "post");
     }
 
     #[test]
@@ -205,12 +205,12 @@ paths:
         )
         .unwrap();
         let item = &spec.paths["/resources/{id}"];
-        let ops = item.operations();
+        let ops: Vec<_> = item.operations().collect();
         assert_eq!(ops.len(), 3);
         let methods: Vec<&str> = ops.iter().map(|o| o.0).collect();
-        assert!(methods.contains(&"PUT"));
-        assert!(methods.contains(&"PATCH"));
-        assert!(methods.contains(&"DELETE"));
+        assert!(methods.contains(&"put"));
+        assert!(methods.contains(&"patch"));
+        assert!(methods.contains(&"delete"));
     }
 
     #[test]
@@ -236,13 +236,13 @@ paths:
         )
         .unwrap();
         let item = &spec.paths["/things"];
-        let ops = item.operations();
+        let ops: Vec<_> = item.operations().collect();
         assert_eq!(ops.len(), 5);
-        assert_eq!(ops[0].0, "GET");
-        assert_eq!(ops[1].0, "POST");
-        assert_eq!(ops[2].0, "PUT");
-        assert_eq!(ops[3].0, "DELETE");
-        assert_eq!(ops[4].0, "PATCH");
+        assert_eq!(ops[0].0, "get");
+        assert_eq!(ops[1].0, "post");
+        assert_eq!(ops[2].0, "put");
+        assert_eq!(ops[3].0, "delete");
+        assert_eq!(ops[4].0, "patch");
     }
 
     #[test]
@@ -259,7 +259,7 @@ paths:
         )
         .unwrap();
         let item = &spec.paths["/empty"];
-        let ops = item.operations();
+        let ops: Vec<_> = item.operations().collect();
         assert!(ops.is_empty());
     }
 
