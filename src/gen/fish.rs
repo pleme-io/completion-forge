@@ -315,7 +315,10 @@ mod tests {
 
         let path = generate(&spec, dir.path()).unwrap();
         let content = std::fs::read_to_string(&path).unwrap();
-        assert!(content.contains("\u{21BB}"), "should contain Update glyph ↻");
+        assert!(
+            content.contains("\u{21BB}"),
+            "should contain Update glyph ↻"
+        );
     }
 
     #[test]
