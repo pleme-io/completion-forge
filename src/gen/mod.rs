@@ -324,7 +324,11 @@ mod tests {
     #[test]
     fn generate_to_readonly_dir_returns_io_error() {
         let spec = sample_spec();
-        let result = generate(&spec, std::path::Path::new("/proc/nonexistent"), Format::All);
+        let result = generate(
+            &spec,
+            std::path::Path::new("/proc/nonexistent"),
+            Format::All,
+        );
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(
@@ -378,8 +382,9 @@ mod tests {
         let variants = [Format::SkimTab, Format::Fish, Format::All];
         for v in &variants {
             let s = v.to_string();
-            let parsed: Format =
-                s.parse().unwrap_or_else(|_| panic!("failed to parse Format from: {s}"));
+            let parsed: Format = s
+                .parse()
+                .unwrap_or_else(|_| panic!("failed to parse Format from: {s}"));
             assert_eq!(*v, parsed, "round-trip failed for {s}");
         }
     }

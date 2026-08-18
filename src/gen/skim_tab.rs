@@ -229,10 +229,7 @@ mod tests {
 
         for (name, _, expected_char) in &glyphs {
             let sub = &parsed.subcommands[*name];
-            assert_eq!(
-                sub.glyph, *expected_char,
-                "glyph mismatch for {name}"
-            );
+            assert_eq!(sub.glyph, *expected_char, "glyph mismatch for {name}");
         }
     }
 
@@ -277,7 +274,11 @@ mod tests {
 
         let groups: Vec<CommandGroup> = (0..12)
             .map(|i| {
-                let glyph = if i % 2 == 0 { Glyph::View } else { Glyph::Create };
+                let glyph = if i % 2 == 0 {
+                    Glyph::View
+                } else {
+                    Glyph::Create
+                };
                 CommandGroup {
                     name: format!("group-{i}"),
                     description: format!("Group {i} operations"),

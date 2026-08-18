@@ -242,8 +242,8 @@ impl RawOp {
         op: &crate::spec::Operation,
         path_params: &[crate::spec::Parameter],
     ) -> Self {
-        let summary = first_non_empty(&[op.summary.as_deref(), op.description.as_deref()])
-            .to_owned();
+        let summary =
+            first_non_empty(&[op.summary.as_deref(), op.description.as_deref()]).to_owned();
         Self {
             // sekkei yields lowercase HTTP methods; completion-forge's IR is
             // uppercase-canonical (Glyph::from_methods, the CLI listing, and
@@ -484,8 +484,7 @@ paths:
     #[test]
     fn convert_by_path() {
         let spec = petstore_spec();
-        let result =
-            convert(&spec, "petstore", "\u{2601}", &[], GroupingStrategy::ByPath);
+        let result = convert(&spec, "petstore", "\u{2601}", &[], GroupingStrategy::ByPath);
         // /pets and /pets/{petId} both group to "pets", /stores to "stores"
         assert_eq!(result.groups.len(), 2);
     }
@@ -516,8 +515,13 @@ paths:
     fn convert_with_aliases() {
         let spec = petstore_spec();
         let aliases = vec!["ps".into(), "pet".into()];
-        let result =
-            convert(&spec, "petstore", "\u{2601}", &aliases, GroupingStrategy::Auto);
+        let result = convert(
+            &spec,
+            "petstore",
+            "\u{2601}",
+            &aliases,
+            GroupingStrategy::Auto,
+        );
         assert_eq!(result.aliases, vec!["ps", "pet"]);
     }
 
@@ -619,7 +623,10 @@ paths: {}
         assert_eq!(GroupingStrategy::Auto.to_string(), "auto");
         assert_eq!(GroupingStrategy::ByTag.to_string(), "by-tag");
         assert_eq!(GroupingStrategy::ByPath.to_string(), "by-path");
-        assert_eq!(GroupingStrategy::ByOperationId.to_string(), "by-operation-id");
+        assert_eq!(
+            GroupingStrategy::ByOperationId.to_string(),
+            "by-operation-id"
+        );
     }
 
     #[test]
@@ -976,10 +983,7 @@ paths:
         use std::collections::BTreeMap;
 
         let mut content = BTreeMap::new();
-        content.insert(
-            "application/json".to_owned(),
-            MediaType { schema: None },
-        );
+        content.insert("application/json".to_owned(), MediaType { schema: None });
 
         let op = Operation {
             operation_id: None,
@@ -1069,7 +1073,11 @@ paths:
         let items = result.groups.iter().find(|g| g.name == "items").unwrap();
         let limit_flags: Vec<&CompletionFlag> =
             items.flags.iter().filter(|f| f.name == "limit").collect();
-        assert_eq!(limit_flags.len(), 1, "duplicate flags should be deduplicated");
+        assert_eq!(
+            limit_flags.len(),
+            1,
+            "duplicate flags should be deduplicated"
+        );
         assert!(
             limit_flags[0].required,
             "first occurrence (path-level, required=true) should win"
@@ -1364,7 +1372,11 @@ paths:
         ];
         let group = build_group("items".into(), &ops);
         let limit_flags: Vec<_> = group.flags.iter().filter(|f| f.name == "limit").collect();
-        assert_eq!(limit_flags.len(), 1, "duplicate flags should be deduplicated");
+        assert_eq!(
+            limit_flags.len(),
+            1,
+            "duplicate flags should be deduplicated"
+        );
         assert!(limit_flags[0].required, "first occurrence should win");
         assert_eq!(limit_flags[0].description, "First limit");
     }
@@ -1505,10 +1517,7 @@ paths:
             }),
         ];
 
-        let results: Vec<String> = converters
-            .iter()
-            .map(|c| c.convert(&spec).name)
-            .collect();
+        let results: Vec<String> = converters.iter().map(|c| c.convert(&spec).name).collect();
 
         assert_eq!(results, vec!["petstore", "mock"]);
     }

@@ -176,10 +176,9 @@ paths:
 
     #[test]
     fn string_spec_loader_json() {
-        let spec: OpenApiSpec = serde_json::from_str(
-            r#"{"info":{"title":"JSON API","version":"1.0"},"paths":{}}"#,
-        )
-        .unwrap();
+        let spec: OpenApiSpec =
+            serde_json::from_str(r#"{"info":{"title":"JSON API","version":"1.0"},"paths":{}}"#)
+                .unwrap();
         assert_eq!(spec.info.title, "JSON API");
     }
 
