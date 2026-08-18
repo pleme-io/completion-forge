@@ -381,7 +381,7 @@ rec {
       };
       "completion-forge" = rec {
         crateName = "completion-forge";
-        version = "0.1.4";
+        version = "0.1.5";
         edition = "2024";
         crateBin = [
           {
