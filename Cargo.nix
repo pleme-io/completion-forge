@@ -381,7 +381,7 @@ rec {
       };
       "completion-forge" = rec {
         crateName = "completion-forge";
-        version = "0.1.5";
+        version = "0.1.6";
         edition = "2024";
         crateBin = [
           {
@@ -897,9 +897,9 @@ rec {
       };
       "sekkei" = rec {
         crateName = "sekkei";
-        version = "0.1.1";
+        version = "0.1.3";
         edition = "2024";
-        sha256 = "056lzzn571n2v2v47yqx9y529jfxpd8cn4kq5w42zk8dafkfm4n2";
+        sha256 = "0cr56dhphkxr4h4lhfnwkrggl8nlg87p4x45zqv50lwfr6b4h40x";
         dependencies = [
           {
             name = "serde";
@@ -1193,9 +1193,9 @@ rec {
       };
       "thiserror" = rec {
         crateName = "thiserror";
-        version = "2.0.19";
+        version = "2.0.20";
         edition = "2021";
-        sha256 = "1ngwxsjsa64v1n7vb90h2b0i3fqk1piwaf0z6fqdacqfhjc3b909";
+        sha256 = "0kxs6p295jffxhzaxpxv1dwaaf5iqlm6sx8h0djp6ancbxgj71pc";
         authors = [
           "David Tolnay <dtolnay@gmail.com>"
         ];
@@ -1212,9 +1212,9 @@ rec {
       };
       "thiserror-impl" = rec {
         crateName = "thiserror-impl";
-        version = "2.0.19";
+        version = "2.0.20";
         edition = "2021";
-        sha256 = "1ka10pqy1g8zy5al9m8yadg30jp8hx0q80j8awmd8131yw6gxjs3";
+        sha256 = "1bwjc94gi0xn5jz26h1a8bjj1wdkvvr6jifamyc4mp9n28zcs15w";
         procMacro = true;
         libName = "thiserror_impl";
         authors = [
